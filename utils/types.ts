@@ -26,6 +26,7 @@ export interface Session {
   practice_area_id: string;
   previous_session_id: string | null;  // NULL for first session in Practice Area
   intent: string;
+  target_duration_seconds: number | null;  // NULL = no target, just stopwatch
   started_at: number;  // Unix timestamp in milliseconds
   ended_at: number | null;  // NULL if session still active
   is_deleted: number;  // 0 = active, 1 = deleted (soft delete)
@@ -99,6 +100,8 @@ export interface AppState {
   currentSession: Session | null;
   sessionStartTime: number | null;
   sessionTimer: number;
+  targetDuration: number | null;  // Target duration in seconds (null = no target)
+  targetReached: boolean;  // Flag when target duration is hit
 
   // Reflection draft state
   reflectionDraft: ReflectionDraft;
@@ -117,7 +120,7 @@ export interface AppActions {
   setCurrentPracticeArea: (practiceArea: PracticeArea | null) => void;
 
   // Session actions
-  startSession: (session: Session) => void;
+  startSession: (session: Session, targetDuration?: number | null) => void;
   updateTimer: () => void;
   endSession: () => void;
 

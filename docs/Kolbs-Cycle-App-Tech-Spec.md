@@ -2,8 +2,8 @@
 
 # Kolb's Reflection Cycle App MVP – Technical Specification
 
-_Last updated: 2025-12-16_
-_Version: 1.1 (Final with all design decisions integrated)_
+_Last updated: 2025-12-18_
+_Version: 1.2 (Final with target duration feature + integer IDs)_
 
 ***
 
@@ -11,7 +11,7 @@ _Version: 1.1 (Final with all design decisions integrated)_
 
 **Platform:** React Native with Expo (managed workflow), iOS-only MVP
 **Developer:** Senior full-stack engineer with React/Node.js expertise, prior React Native + Expo experience[^1]
-**Timeline:** 12.2 days (~2.5-3 weeks)
+**Timeline:** 12.7 days (~2.5-3 weeks)
 **Core Focus:** Privacy-first, local-only reflection app enforcing sequential Practice Area → Series → Sessions model with Kolb-based reflections[^2]
 
 ### Key Simplifications
@@ -20,12 +20,11 @@ _Version: 1.1 (Final with all design decisions integrated)_
 - **State management:** Zustand (simpler than Context + useReducer, better performance)
 - **Analytics:** None; all analysis via manual JSON export[^2]
 
-
 ### MVP Scope Highlights
 
 - ✅ Practice Area creation \& selection
 - ✅ Sequential session linking with strict enforcement
-- ✅ Timer-based session flow
+- ✅ **Timer with optional target duration** (15/30/45/60 min presets + notifications)
 - ✅ 3 reflection formats (Direct, Reflective, Minimalist)[^2]
 - ✅ **24h/48h reflection deadlines** with "Reflect Later" option
 - ✅ **Edit reflections** within 48h (with `updated_at` tracking)
@@ -43,6 +42,7 @@ _Version: 1.1 (Final with all design decisions integrated)_
 - ❌ Dedicated accessibility work beyond RN defaults
 - ❌ Cloud sync or external analytics
 - ❌ Intent editing (immutable after session start)
+- ❌ Countdown timer (only count-up with optional target)
 
 ***
 
@@ -55,9 +55,10 @@ _Version: 1.1 (Final with all design decisions integrated)_
 | Framework | React Native + Expo SDK 52+ | Leverages developer's React expertise, rapid mobile MVP delivery [^1] |
 | Platform | iOS only | Simplifies QA, build config, platform edge cases [^2] |
 | Navigation | React Navigation 6.x (Stack) | Industry standard, excellent Expo integration |
-| State Management | Zustand | Simpler setup than Context, better performance with selective re-renders [^3] |
+| State Management | **Zustand** | Simpler setup than Context, better performance with selective re-renders |
 | Database | expo-sqlite (SQLCipher encryption) | Relational model, enforces sequential linking, local-only [^2] |
 | Security | expo-local-authentication | Device lock status check (Face ID/passcode) [^2] |
+| Notifications | expo-notifications | Target duration alerts (local, no push) |
 | File Export | expo-file-system + expo-sharing | JSON export via iOS share sheet [^2] |
 | UI Components | React Native built-ins + minimal custom | Fast MVP delivery, native feel |
 | Styling | StyleSheet API + theme constants | Type-safe, performant |
@@ -86,11 +87,12 @@ App.tsx
 ├── services/
 │   ├── exportService.ts
 │   ├── securityService.ts
-│   └── reflectionStateService.ts
+│   ├── reflectionStateService.ts
+│   └── notificationService.ts
 └── utils/
     ├── constants.ts
     ├── types.ts
-    └── uuid.ts
+    └── timeFormatting.ts
 ```
 
 
@@ -113,6 +115,8 @@ export const useAppStore = create((set, get) => ({
   currentSession: null,
   sessionStartTime: null,
   sessionTimer: 0,
+  targetDuration: null,  // NEW: Target duration in seconds (null = no target)
+  targetReached: false,  // NEW: Track if target was reached
   
   // Reflection draft state
   reflectionDraft: {
@@ -133,22 +137,36 @@ export const useAppStore = create((set, get) => ({
   setCurrentPracticeArea: (pa) => set({ currentPracticeArea: pa }),
   
   // Actions: Sessions
-  startSession: (session) => set({ 
+  startSession: (session, targetDuration = null) => set({ 
     currentSession: session, 
     sessionStartTime: Date.now(),
     sessionTimer: 0,
+    targetDuration,  // NEW
+    targetReached: false,  // NEW
   }),
   
-  updateTimer: () => set((state) => ({
-    sessionTimer: state.sessionStartTime 
+  updateTimer: () => set((state) => {
+    const newTimer = state.sessionStartTime 
       ? Math.floor((Date.now() - state.sessionStartTime) / 1000)
-      : 0
-  })),
+      : 0;
+    
+    // NEW: Check if target reached
+    const targetJustReached = state.targetDuration 
+      && !state.targetReached 
+      && newTimer >= state.targetDuration;
+    
+    return {
+      sessionTimer: newTimer,
+      targetReached: state.targetReached || targetJustReached,
+    };
+  }),
   
   endSession: () => set({ 
     currentSession: null, 
     sessionStartTime: null,
     sessionTimer: 0,
+    targetDuration: null,  // NEW
+    targetReached: false,  // NEW
   }),
   
   // Actions: Reflection drafts
@@ -182,28 +200,22 @@ export const useAppStore = create((set, get) => ({
 
 ```typescript
 // In SessionActiveScreen
-const { currentSession, sessionTimer, updateTimer, endSession } = useAppStore();
+const { 
+  currentSession, 
+  sessionTimer, 
+  targetDuration,  // NEW
+  updateTimer, 
+  endSession 
+} = useAppStore();
+
+const progress = targetDuration ? sessionTimer / targetDuration : null;
 
 useEffect(() => {
   const interval = setInterval(() => updateTimer(), 1000);
   return () => clearInterval(interval);
 }, [updateTimer]);
-
-// In ReflectionPromptsScreen
-const { reflectionDraft, updateReflectionDraft } = useAppStore();
-
-const handleStep2Change = (text) => {
-  updateReflectionDraft('step2', text);
-  // Autosave to DB (debounced)
-  saveDraftToDb(currentSession.id, 'step2', text);
-};
 ```
 
-**Benefits:**
-
-- No Provider wrappers needed[^3]
-- Components only re-render when their specific slice changes[^4]
-- ~2 hours saved vs Context + useReducer setup[^1]
 
 ***
 
@@ -226,12 +238,14 @@ CREATE TABLE IF NOT EXISTS sessions (
   practice_area_id TEXT NOT NULL,
   previous_session_id TEXT,       -- NULL only for first session in a Practice Area
   intent TEXT NOT NULL,
+  target_duration_seconds INTEGER,  -- NEW: NULL = no target, just stopwatch
   started_at INTEGER NOT NULL,
   ended_at INTEGER,               -- NULL if session still active
   is_deleted INTEGER DEFAULT 0,
   FOREIGN KEY (practice_area_id) REFERENCES practice_areas(id),
   FOREIGN KEY (previous_session_id) REFERENCES sessions(id)
 );
+
 
 -- Reflections
 CREATE TABLE IF NOT EXISTS reflections (
@@ -241,7 +255,7 @@ CREATE TABLE IF NOT EXISTS reflections (
   step2_answer TEXT NOT NULL,     -- "What happened?"
   step3_answer TEXT NOT NULL,     -- "Lesson/pattern"
   step4_answer TEXT NOT NULL,     -- "Next action"
-  feedback_rating INTEGER,        -- 0=😕 1=😞, 2=😐, 3=🙂, 4=🚀, NULL if skipped
+  feedback_rating INTEGER,        -- 0=😕 Confusing, 1=😞 Hard, 2=😐 Neutral, 3=🙂 Good, 4=🚀 Great, NULL=skipped
   feedback_note TEXT,
   completed_at INTEGER NOT NULL,
   updated_at INTEGER,             -- NULL if never edited, otherwise timestamp of last edit
@@ -279,6 +293,12 @@ CREATE INDEX IF NOT EXISTS idx_sessions_ended_at
 
 - Reflection answers: 3000 characters per field (≈500 words)[^2]
 - Configurable via constant in `utils/constants.ts`
+
+**Target Duration:**
+
+- `target_duration_seconds` is optional (NULL if no target set)
+- Common presets: 900 (15min), 1800 (30min), 2700 (45min), 3600 (60min)
+- No enforcement - session can exceed target (notification only)
 
 **Reflection Deadlines:**
 
@@ -368,9 +388,9 @@ ORDER BY s.ended_at ASC;
 
 ***
 
-### 5.3 SessionSetupScreen – Intent Setup
+### 5.3 SessionSetupScreen – Intent Setup + Target Duration
 
-**Purpose:** Display previous intent, capture new session intent[^2]
+**Purpose:** Display previous intent, capture new session intent, optionally set target duration[^2]
 
 **UI Components:**
 
@@ -381,6 +401,13 @@ ORDER BY s.ended_at ASC;
 - Multiline TextInput for new intent
     - Placeholder: _"What is your intent or micro-goal for today?"_
     - Works with Wispr Flow system keyboard for voice input
+- **NEW: Practice Duration (Optional)** section:
+    - Label: _"Practice duration (optional)"_
+    - Quick preset buttons (side-by-side):
+        - [15 min] [30 min] [45 min] [60 min]
+    - Selected button highlighted
+    - Tap again to deselect (no target)
+    - Small text: _"You'll get a notification when time is up, but can continue practicing."_
 - "Start Session" button (disabled if intent empty)
 
 **Data Queries:**
@@ -399,6 +426,15 @@ LIMIT 1;
 **Logic:**
 
 ```typescript
+const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
+
+const durationPresets = [
+  { label: '15 min', seconds: 15 * 60 },
+  { label: '30 min', seconds: 30 * 60 },
+  { label: '45 min', seconds: 45 * 60 },
+  { label: '60 min', seconds: 60 * 60 },
+];
+
 const handleStartSession = async () => {
   // Get last session ID for this PA
   const lastSession = await db.getAsync(/* query above */);
@@ -411,6 +447,7 @@ const handleStartSession = async () => {
     intent: intentText,
     started_at: Date.now(),
     ended_at: null,
+    selectedDuration: selectedDuration,
     is_deleted: 0,
   };
   
@@ -428,30 +465,63 @@ const handleStartSession = async () => {
 
 - Save draft intent to AsyncStorage on blur (simple recovery if app crashes)
 
-**Time Estimate:** 0.5 days (4 hours)
+**Time Estimate:** 0.75 days (6 hours)
 
 - UI + previous intent display: 2 hours
-- Session creation logic: 1.5 hours
-- Draft autosave: 0.5 hours
+- **NEW: Duration preset buttons:** 1 hour
+- Session creation logic (with target_duration): 2 hours
+- Draft autosave: 1 hour
 
 ***
 
-### 5.4 SessionActiveScreen – Timer
+### 5.4 SessionActiveScreen – Timer with Target Progress
 
-**Purpose:** Display timer and current intent during active practice[^2]
+**Purpose:** Display timer, current intent, and optional progress toward target during active practice[^2]
 
 **UI Components:**
 
-- Large timer display (HH:MM:SS or MM:SS if <1 hour)
+**If NO target duration set:**
+
+- Large timer display (MM:SS or HH:MM:SS if >1 hour)
 - Current intent (read-only, fixed at top)
 - Practice Area name
 - "End Session" button → shows **two options**:
     - **"End \& Reflect Now"** (primary, emphasized)
     - **"End Session (Reflect Later)"** (secondary)
 
+**If target duration IS set:**
+
+- **Timer with target:** _"28:45 / 30:00"_ (elapsed / target)
+- **Progress bar** (visual indicator, 0-100%)
+    - Green while under target
+    - Yellow when within last 2 minutes
+    - Continues past 100% if user keeps practicing (bar stays full, timer shows exceeded time)
+- Current intent
+- Practice Area name
+- Same two-button "End Session" options
+
 **Logic:**
 
 ```typescript
+const { 
+  currentSession, 
+  sessionTimer, 
+  targetDuration, 
+  updateTimer, 
+  endSession 
+} = useAppStore();
+
+const progress = targetDuration 
+  ? Math.min(sessionTimer / targetDuration, 1.0)  // Cap at 100%
+  : null;
+
+const isNearingTarget = targetDuration 
+  ? (targetDuration - sessionTimer) <= 120 && sessionTimer < targetDuration
+  : false;
+
+const hasExceededTarget = targetDuration && sessionTimer >= targetDuration;
+
+// Timer update
 useEffect(() => {
   const interval = setInterval(() => {
     updateTimer(); // Updates Zustand state
@@ -459,6 +529,24 @@ useEffect(() => {
   
   return () => clearInterval(interval);
 }, [updateTimer]);
+
+// Target duration notification
+useEffect(() => {
+  if (targetDuration && sessionTimer === targetDuration) {
+    // Schedule immediate local notification
+    Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Practice time complete! 🎉',
+        body: 'You reached your target duration. Continue or end session?',
+        sound: true,
+      },
+      trigger: null,  // Immediate
+    });
+    
+    // Vibrate (short pattern)
+    Vibration.vibrate([0, 200, 100, 200]);
+  }
+}, [sessionTimer, targetDuration]);
 
 // Handle app backgrounding (preserve timer)
 useEffect(() => {
@@ -487,16 +575,43 @@ const handleEndSession = async (action: 'reflect_now' | 'reflect_later') => {
 };
 ```
 
+**UI Rendering:**
+
+```tsx
+<View style={styles.timerContainer}>
+  {targetDuration ? (
+    <>
+      <Text style={styles.timerWithTarget}>
+        {formatTime(sessionTimer)} / {formatTime(targetDuration)}
+      </Text>
+      <ProgressBar 
+        progress={progress} 
+        color={hasExceededTarget ? '#4CAF50' : isNearingTarget ? '#FFC107' : '#2196F3'}
+      />
+      {hasExceededTarget && (
+        <Text style={styles.exceededText}>
+          +{formatTime(sessionTimer - targetDuration)} over target
+        </Text>
+      )}
+    </>
+  ) : (
+    <Text style={styles.timer}>{formatTime(sessionTimer)}</Text>
+  )}
+</View>
+```
+
 **Constraints:**
 
 - Block back button during session (show confirmation: _"End session early?"_)
 - No ability to change Practice Area mid-session[^2]
 
-**Time Estimate:** 0.75 days (6 hours)
+**Time Estimate:** 1 day (8 hours)
 
 - Timer logic: 2 hours
-- AppState handling: 2 hours
-- Two-button end flow: 1 hour
+- **NEW: Progress bar + target logic:** 2 hours
+- **NEW: Notification + vibration:** 1.5 hours
+- AppState handling: 1 hour
+- Two-button end flow: 0.5 hours
 - Back button handling: 1 hour
 
 ***
@@ -593,7 +708,6 @@ const saveDraftToDb = async (sessionId, answers) => {
       [JSON.stringify(answers), sessionId]
     );
   } catch (error) {
-    // Show toast (non-blocking)
     showToast('Auto-save failed. Please try again.', 'error');
   }
 };
@@ -629,11 +743,11 @@ const handleTextChange = (text: string) => {
 
 - Question: _"How did this reflection feel?"_
 - 5 emoji buttons (single-select, large tap targets):
-    - 0: 😕 Confusing / Unclear
-    - 1: 😞 Hard / Frustrating
-    - 2: 😐 Neutral / Meh
-    - 3: 🙂 Good / Helpful
-    - 4: 🚀 Great / Energizing
+    - **0:** 😕 Confusing / Unclear
+    - **1:** 😞 Hard / Frustrating
+    - **2:** 😐 Neutral / Meh
+    - **3:** 🙂 Good / Helpful
+    - **4:** 🚀 Great / Energizing
 - **Expandable text area** (collapsed by default):
     - Label: _"What made this reflection feel this way?"_ (optional)
     - Placeholder: _"e.g., prompts were too long, felt rushed, had a breakthrough, etc."_
@@ -684,6 +798,9 @@ const handleFinish = async () => {
 **Each session row shows:**
     - Date/time
     - Intent (truncated to 2 lines)
+    - **NEW: Duration badge** (if session ended):
+        - _"30 min"_ (actual duration)
+        - If had target: _"32 min (target: 30 min)"_ with checkmark ✓ or timer icon ⏱️
     - Format badge: **D** / **R** / **M** (Direct/Reflective/Minimalist)
     - Reflection state badge:
         - ✅ Completed (if reflection exists)
@@ -705,6 +822,7 @@ const handleFinish = async () => {
 Intent: "Practice left-hand accents"
 Started: Dec 16, 10:30 AM
 Ended: Dec 16, 11:00 AM (30 minutes)
+Target: 30 min ✓  [shown if target was set]
 
 Reflection Format: Direct & Action-Oriented ⚡
 Completed: Dec 16, 11:15 AM
@@ -715,7 +833,7 @@ What happened: "Struggled with F# major transitions..."
 Lesson: "Need to practice finger independence..."
 Next action: "Focus on slow, deliberate movements..."
 
-Feedback: 🙂 Good / Helpful
+Feedback: 🙂 Good / Helpful (3)
 Note: "Felt clear and useful"
 
 [Edit Reflection] [Move to Different PA] [Close]
@@ -738,6 +856,7 @@ Note: "Felt clear and useful"
 Intent: "Practice left-hand accents"
 Started: Dec 16, 10:30 AM
 Ended: Dec 16, 11:00 AM (30 minutes)
+Target: 30 min ✓
 
 Status: 🟠 Reflection Overdue (expires in 18h)
 
@@ -764,9 +883,7 @@ const handleMoveSession = async (sessionId, newPracticeAreaId) => {
     [newPracticeAreaId, lastInNewPA?.id || null, sessionId]
   );
   
-  // Refresh timeline
   loadSessions();
-  
   showToast('Session moved successfully', 'success');
 };
 ```
@@ -836,10 +953,11 @@ const getPreviousIntent = async (session) => {
 };
 ```
 
-**Time Estimate:** 1.5 days (12 hours)
+**Time Estimate:** 1.75 days (14 hours)
 
 - FlatList with complex session states: 4 hours
-- Session detail modal (3 variants): 4 hours
+- **NEW: Duration display with target comparison:** 1 hour
+- Session detail modal (3 variants): 5 hours
 - Move session logic: 2 hours
 - Delete session logic: 1 hour
 - Previous intent edge case handling: 1 hour
@@ -873,7 +991,6 @@ const getPreviousIntent = async (session) => {
 
 ```typescript
 const exportData = async () => {
-  // 1. Query all data
   const practiceAreas = await db.getAllAsync(
     'SELECT * FROM practice_areas WHERE is_deleted = 0'
   );
@@ -897,35 +1014,44 @@ const exportData = async () => {
       id: pa.id,
       name: pa.name,
       created_at: pa.created_at,
-      sessions: sessions.map(s => ({
-        id: s.id,
-        previous_session_id: s.previous_session_id,
-        intent: s.intent,
-        started_at: s.started_at,
-        ended_at: s.ended_at,
-        reflection: s.session_id ? {
-          format: s.format,
-          step2_answer: s.step2_answer,
-          step3_answer: s.step3_answer,
-          step4_answer: s.step4_answer,
-          feedback_rating: s.feedback_rating,
-          feedback_note: s.feedback_note,
-          completed_at: s.completed_at,
-          updated_at: s.updated_at,
-          is_edited: s.updated_at && s.updated_at > s.completed_at,
-        } : null
-      }))
+      sessions: sessions.map(s => {
+        const actualDuration = s.ended_at ? (s.ended_at - s.started_at) / 1000 : null;
+        
+        return {
+          id: s.id,
+          previous_session_id: s.previous_session_id,
+          intent: s.intent,
+          started_at: s.started_at,
+          ended_at: s.ended_at,
+          target_duration_seconds: s.target_duration_seconds,  // NEW
+          actual_duration_seconds: actualDuration,  // NEW: Computed
+          met_target: s.target_duration_seconds && actualDuration 
+            ? actualDuration >= s.target_duration_seconds 
+            : null,  // NEW: Did they meet target?
+          reflection: s.session_id ? {
+            format: s.format,
+            step2_answer: s.step2_answer,
+            step3_answer: s.step3_answer,
+            step4_answer: s.step4_answer,
+            feedback_rating: s.feedback_rating,
+            feedback_note: s.feedback_note,
+            completed_at: s.completed_at,
+            updated_at: s.updated_at,
+            is_edited: s.updated_at && s.updated_at > s.completed_at,
+          } : null
+        };
+      })
     });
   }
   
-  // 2. Write to file
+  // Write to file
   const fileUri = FileSystem.documentDirectory + `kolbs-export-${Date.now()}.json`;
   await FileSystem.writeAsStringAsync(
     fileUri,
     JSON.stringify(exportData, null, 2)
   );
   
-  // 3. Share via iOS share sheet
+  // Share via iOS share sheet
   await Sharing.shareAsync(fileUri, {
     mimeType: 'application/json',
     dialogTitle: 'Export Kolbs Reflection Data'
@@ -933,34 +1059,72 @@ const exportData = async () => {
 };
 ```
 
-**Device Lock Check:**
+**Time Estimate:** 1.25 days (10 hours)
 
-```typescript
-import * as LocalAuthentication from 'expo-local-authentication';
-
-const checkDeviceSecurity = async () => {
-  const hasHardware = await LocalAuthentication.hasHardwareAsync();
-  const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-  return hasHardware && isEnrolled;
-};
-
-useEffect(() => {
-  checkDeviceSecurity().then(setIsDeviceSecure);
-}, []);
-```
-
-**Time Estimate:** 1 day (8 hours)
-
-- Export JSON builder: 4 hours
+- Export JSON builder (with target duration fields): 5 hours
 - File write + share sheet: 2 hours
 - Device lock check + UI: 1 hour
-- Settings layout: 1 hour
+- Settings layout: 2 hours
 
 ***
 
-## 6. Reflection State Management
+## 6. Notification Service
 
-### 6.1 State Calculation Service
+### 6.1 Setup \& Permissions
+
+```typescript
+// services/notificationService.ts
+import * as Notifications from 'expo-notifications';
+
+export const setupNotifications = async () => {
+  // Request permissions (iOS)
+  const { status } = await Notifications.requestPermissionsAsync();
+  
+  if (status !== 'granted') {
+    console.warn('Notification permissions not granted');
+    return false;
+  }
+  
+  // Set notification handler (how to handle when app is foregrounded)
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+  
+  return true;
+};
+
+export const scheduleTargetReachedNotification = async () => {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Practice time complete! 🎉',
+      body: 'You reached your target duration. Continue or end session?',
+      sound: true,
+      data: { type: 'target_reached' },
+    },
+    trigger: null,  // Immediate
+  });
+};
+```
+
+**Call in App.tsx on mount:**
+
+```typescript
+useEffect(() => {
+  setupNotifications();
+}, []);
+```
+
+**Time:** Included in SessionActiveScreen estimate (1.5 hours for notification logic)
+
+***
+
+## 7. Reflection State Management
+
+### 7.1 State Calculation Service
 
 ```typescript
 // services/reflectionStateService.ts
@@ -1053,9 +1217,9 @@ export const getReflectionBadge = (state: ReflectionState): {
 
 ***
 
-## 7. Security \& Privacy
+## 8. Security \& Privacy
 
-### 7.1 Local Encryption (SQLCipher)
+### 8.1 Local Encryption (SQLCipher)
 
 ```typescript
 import * as SQLite from 'expo-sqlite';
@@ -1080,7 +1244,7 @@ const initDatabase = async () => {
 
 ***
 
-### 7.2 Device Lock Warning
+### 8.2 Device Lock Warning
 
 ```typescript
 // In HomeScreen
@@ -1104,64 +1268,65 @@ useEffect(() => {
 
 ***
 
-## 8. Development Timeline \& Estimates
+## 9. Development Timeline \& Estimates
 
-### 8.1 Task Breakdown
+### 9.1 Task Breakdown
 
 | Phase | Tasks | Hours | Days |
 | :-- | :-- | :-- | :-- |
 | **Setup \& Foundation** | Expo init, navigation, Zustand store, DB schema + migrations, theme constants | 8 | 1.0 |
 | **Practice Area Management** | HomeScreen (list, create modal, pending reflections banner) | 6 | 0.75 |
-| **Session Flow (Core)** | SessionSetupScreen (previous intent, new intent input) | 4 | 0.5 |
-|  | SessionActiveScreen (timer, two-button end flow, AppState handling) | 6 | 0.75 |
+| **Session Flow (Core)** | SessionSetupScreen (previous intent, new intent input, **target duration presets**) | 6 | 0.75 |
+|  | SessionActiveScreen (**timer with progress bar, target notifications**, two-button end flow, AppState handling) | 8 | 1.0 |
 | **Reflection Flow** | ReflectionFormatScreen (3 cards) | 2 | 0.25 |
 |  | ReflectionPromptsScreen (multi-step form, autosave, character limit, edit mode) | 10 | 1.25 |
 |  | ReflectionFeedbackScreen (emoji + optional note) | 2 | 0.25 |
 | **Reflection State Logic** | State calculation service (pending/overdue/expired), badge helpers | 4 | 0.5 |
-| **Series Timeline** | List view with complex states, session detail modal (3 variants) | 8 | 1.0 |
+| **Series Timeline** | List view with complex states, **duration display with target**, session detail modal (3 variants) | 10 | 1.25 |
 |  | Move session logic (with reflection intact) | 2 | 0.25 |
 |  | Delete session logic (no reflection check, soft delete) | 1 | 0.125 |
 |  | Edit reflection flow (navigate to prompts in edit mode, update timestamp) | 2 | 0.25 |
 |  | Previous intent orphan handling | 1 | 0.125 |
-| **Export/Settings** | JSON export builder (with updated_at, is_edited), file write + share sheet | 6 | 0.75 |
+| **Export/Settings** | JSON export builder (with **target duration fields**, updated_at, is_edited), file write + share sheet | 8 | 1.0 |
 |  | Device lock check, settings UI | 2 | 0.25 |
 | **Autosave \& AppState** | Debounced autosave, background save, error handling | 4 | 0.5 |
+| **Notifications** | **Setup notification service, permission handling** | 2 | 0.25 |
 | **Security** | SQLCipher setup, device lock warning banner | 2 | 0.25 |
 | **Polish \& Bug Fixes** | UI refinement, loading states, edge cases, toast notifications | 8 | 1.0 |
 | **Documentation** | Inline comments, README (LLM-assisted) | 4 | 0.5 |
 
-**Subtotal:** 82 hours = **10.25 days**
+**Subtotal:** 86 hours = **10.75 days**
 
 ***
 
-### 8.2 Overhead \& Contingency
+### 9.2 Overhead \& Contingency
 
 | Item | Multiplier/Hours | Total |
 | :-- | :-- | :-- |
-| Code review (solo, 5%) | 82 × 0.05 | 4.1 hours |
+| Code review (solo, 5%) | 86 × 0.05 | 4.3 hours |
 | Expo + React Native refresher | One-time | 4 hours |
 | TestFlight setup (EAS Build config) | One-time | 2 hours |
 | TestFlight builds (3 builds × 0.5h each) | Week 1, 2, 3 | 1.5 hours |
 
-**Overhead Total:** 11.6 hours = **1.45 days**
+**Overhead Total:** 11.8 hours = **1.5 days**
 
 ***
 
-### 8.3 Total Timeline
+### 9.3 Total Timeline
 
-**11.7 days** (~2.3 weeks at full capacity)
+**12.25 days** (~2.5 weeks at full capacity)
 
-**Recommended:** Plan for **12-13 days (2.5-3 weeks)** to account for:
+**Recommended:** Plan for **12.5-13 days (2.5-3 weeks)** to account for:
 
 - TestFlight testing feedback cycles
-- iOS-specific quirks (keyboard behavior, navigation edge cases)
+- iOS-specific quirks (keyboard behavior, navigation edge cases, notification permissions)
 - Physical device testing with Wispr Flow
 
 ***
 
-### 8.4 Week-by-Week Breakdown
+### 9.4 Week-by-Week Breakdown
 
-#### **Week 1: Core Infrastructure + Session Flow + First Build** (Days 1-5)
+#### **Week 1: Core Infrastructure + Session Flow with Timer + First Build** (Days 1-5)
 
 **Days 1-4:**
 
@@ -1169,7 +1334,8 @@ useEffect(() => {
 - Zustand store creation
 - SQLite schema + migrations, encryption
 - Practice Area CRUD (HomeScreen)
-- Session setup + active timer screens
+- Session setup with **target duration presets**
+- SessionActiveScreen with **progress bar and notifications**
 - Reflection format selection
 
 **Day 5:**
@@ -1177,7 +1343,7 @@ useEffect(() => {
 - TestFlight setup (Apple Developer Portal + EAS config)
 - **First TestFlight Build** (core flow testable)
 
-**Deliverable:** TestFlight build with Practice Area creation, session start/timer, format selection
+**Deliverable:** TestFlight build with Practice Area creation, session start/timer with optional target, format selection
 
 ***
 
@@ -1189,18 +1355,19 @@ useEffect(() => {
 - ReflectionFeedbackScreen
 - Reflection state service (pending/overdue/expired logic)
 - Sequential session linking enforcement
+- Notification service setup
 
 **Day 9:**
 
-- **Second TestFlight Build** (full reflection flow)
+- **Second TestFlight Build** (full reflection flow + notifications)
 
 **Days 9-10:**
 
-- SeriesTimelineScreen (list view, session detail modal)
+- SeriesTimelineScreen (list view with duration display, session detail modal)
 - Move/delete session logic
 - Edit reflection flow
 
-**Deliverable:** Complete end-to-end flow testable on device with real Wispr Flow keyboard
+**Deliverable:** Complete end-to-end flow testable on device with real Wispr Flow keyboard + target duration notifications
 
 ***
 
@@ -1208,7 +1375,7 @@ useEffect(() => {
 
 **Days 11-13:**
 
-- Export/backup (JSON with metadata)
+- Export/backup (JSON with target duration metadata)
 - Settings screen
 - Device lock warning
 - Pending reflections banner on HomeScreen
@@ -1225,9 +1392,9 @@ useEffect(() => {
 
 ***
 
-## 9. Platform Configuration
+## 10. Platform Configuration
 
-### 9.1 app.json (Expo Config)
+### 10.1 app.json (Expo Config)
 
 ```json
 {
@@ -1242,7 +1409,8 @@ useEffect(() => {
       "buildNumber": "1",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app uses your microphone for voice input via voice-enabled keyboards like Wispr Flow.",
-        "NSFaceIDUsageDescription": "Enable Face ID to help protect access to your private reflections."
+        "NSFaceIDUsageDescription": "Enable Face ID to help protect access to your private reflections.",
+        "NSUserNotificationsUsageDescription": "Receive notifications when you reach your practice target duration."
       }
     },
     "plugins": [
@@ -1250,7 +1418,13 @@ useEffect(() => {
       "expo-file-system",
       "expo-sharing",
       "expo-secure-store",
-      "expo-local-authentication"
+      "expo-local-authentication",
+      [
+        "expo-notifications",
+        {
+          "sounds": ["notification.wav"]
+        }
+      ]
     ],
     "extra": {
       "eas": {
@@ -1264,7 +1438,7 @@ useEffect(() => {
 
 ***
 
-### 9.2 eas.json (Build Configuration)
+### 10.2 eas.json (Build Configuration)
 
 ```json
 {
@@ -1305,7 +1479,7 @@ useEffect(() => {
 
 ***
 
-### 9.3 Key Dependencies (package.json)
+### 10.3 Key Dependencies (package.json)
 
 ```json
 {
@@ -1316,9 +1490,11 @@ useEffect(() => {
     "expo-sharing": "^12.0.0",
     "expo-secure-store": "^13.0.0",
     "expo-local-authentication": "^14.0.0",
+    "expo-notifications": "^0.28.0",
     "@react-navigation/native": "^6.1.0",
     "@react-navigation/stack": "^6.3.0",
     "react-native-uuid": "^2.0.0",
+
     "zustand": "^4.5.0",
     "react-native-toast-message": "^2.2.0"
   }
@@ -1328,9 +1504,9 @@ useEffect(() => {
 
 ***
 
-## 10. Risk Mitigation
+## 11. Risk Mitigation
 
-### 10.1 Wispr Flow Integration
+### 11.1 Wispr Flow Integration
 
 **Risk:** Wispr Flow doesn't work as expected in React Native TextInput
 
@@ -1344,7 +1520,22 @@ useEffect(() => {
 
 ***
 
-### 10.2 Sequential Linking Complexity
+### 11.2 Notification Permissions
+
+**Risk:** User denies notification permissions, can't get target alerts
+
+**Mitigation:**
+
+- Notifications are **optional** - session timer still works without them
+- Show one-time explanation before requesting permission: _"Get notified when you reach your practice goal"_
+- If denied: Still show visual progress bar and vibration (doesn't require permission)
+- Post-MVP: Add Settings toggle to re-request permission
+
+**Likelihood:** Medium (some users disable all notifications)
+
+***
+
+### 11.3 Sequential Linking Complexity
 
 **Risk:** Sessions get orphaned or incorrectly linked, breaking Series integrity
 
@@ -1358,21 +1549,7 @@ useEffect(() => {
 
 ***
 
-### 10.3 Reflection Deadline UX
-
-**Risk:** Users find 24h/48h deadlines too strict, creates pressure
-
-**Mitigation:**
-
-- Monitor usage patterns via export data analysis (manual)
-- Post-MVP: Make deadlines configurable in Settings (24h/48h/none)
-- Clear messaging: _"Reflect while details are fresh"_ (educational, not punitive)
-
-**Likelihood:** Low-Medium (depends on user discipline preferences)
-
-***
-
-### 10.4 Autosave Race Conditions
+### 11.4 Autosave Race Conditions
 
 **Risk:** User rapidly switches fields or backgrounds app, causing save conflicts
 
@@ -1386,9 +1563,9 @@ useEffect(() => {
 
 ***
 
-## 11. Testing Strategy (MVP Scope)
+## 12. Testing Strategy (MVP Scope)
 
-### 11.1 Manual Testing Focus
+### 12.1 Manual Testing Focus
 
 **No automated tests for MVP** (per developer profile).[^1]
 
@@ -1400,6 +1577,15 @@ useEffect(() => {
 - ✅ Second session links to first session ID
 - ✅ After moving session, new PA's next session links correctly
 - ✅ Deleted session doesn't break next session's lookup
+
+**Target Duration:**
+
+- ✅ Can create session without target (NULL in DB)
+- ✅ Can create session with 15/30/45/60 min target
+- ✅ Progress bar updates correctly during session
+- ✅ Notification triggers when target reached
+- ✅ Can continue practicing past target (timer keeps running)
+- ✅ Export shows `target_duration_seconds` and `met_target` correctly
 
 **Reflection Deadlines:**
 
@@ -1432,18 +1618,20 @@ useEffect(() => {
 **Export:**
 
 - ✅ JSON includes all Practice Areas + Sessions + Reflections
+- ✅ `target_duration_seconds`, `actual_duration_seconds`, `met_target` fields present
 - ✅ `updated_at` and `is_edited` fields present
 - ✅ Share sheet opens correctly
 - ✅ Can save to Files or AirDrop
 
 ***
 
-### 11.2 TestFlight Testing Workflow
+### 12.2 TestFlight Testing Workflow
 
 **Week 1 Build:**
 
 - Test Practice Area creation
-- Test session timer (including app backgrounding)
+- Test session timer with and without target duration
+- Test notification when target reached
 - Test Wispr Flow keyboard input
 
 **Week 2 Build:**
@@ -1456,20 +1644,22 @@ useEffect(() => {
 
 - Test move/delete sessions
 - Test edit reflections (within and after 48h)
-- Test export (verify JSON structure manually)
+- Test export (verify JSON structure, especially target duration fields)
 - Test all edge cases from critical test list
 
 ***
 
-## 12. Post-MVP Roadmap
+## 13. Post-MVP Roadmap
 
-### 12.1 Deferred Features (High Value)
+### 13.1 Deferred Features (High Value)
 
 | Feature | Effort | Value |
 | :-- | :-- | :-- |
-| **Filters on timeline** (by format, by feedback) | +1 day | Medium - helps find patterns |
-| **Synthesis view** (charts: format distribution, feedback trends) | +2-3 days | High - visual insights |
+| **Filters on timeline** (by format, by feedback, by target met/missed) | +1 day | Medium - helps find patterns |
+| **Synthesis view** (charts: format distribution, feedback trends, target completion rate) | +2-3 days | High - visual insights |
 | **Configurable deadlines** (24h/48h/off in Settings) | +0.5 days | Medium - user flexibility |
+| **Custom target durations** (manual input, not just presets) | +0.25 days | Low - presets likely sufficient |
+| **Countdown timer mode** (alternative to count-up) | +0.75 days | Medium - user preference |
 | **Auto-repair chains** (fix orphaned `previous_session_id`) | +0.5 days | Low - edge case handling |
 | **Android support** | +0.5 days | High - expands user base |
 | **Accessibility** (screen reader tuning, VoiceOver support) | +2 days | High - inclusivity |
@@ -1477,18 +1667,18 @@ useEffect(() => {
 
 ***
 
-### 12.2 Technical Debt
+### 13.2 Technical Debt
 
 - **Testing:** Add Detox/Playwright integration tests (+3-4 days)
 - **State management:** Consider Redux if app grows beyond 10 screens (+1-2 days)
-- **Onboarding:** First-run tutorial explaining Series model (+1 day)
+- **Onboarding:** First-run tutorial explaining Series model + target duration feature (+1 day)
 - **Cloud backup:** Optional iCloud sync (requires ejecting Expo, +4-5 days)
 
 ***
 
-## 13. Developer Handoff Checklist
+## 14. Developer Handoff Checklist
 
-### 13.1 Before Starting Development
+### 14.1 Before Starting Development
 
 - [ ] Install Expo CLI (`npm install -g expo-cli`)
 - [ ] Create Apple Developer Account (\$99/year)
@@ -1499,28 +1689,30 @@ useEffect(() => {
 
 ***
 
-### 13.2 Week 1 Deliverables
+### 14.2 Week 1 Deliverables
 
 - [ ] Can create/select Practice Areas
-- [ ] Session timer works and persists on background
+- [ ] Session timer works with optional target duration (15/30/45/60 min)
+- [ ] Progress bar displays correctly for sessions with targets
+- [ ] Notification triggers when target reached (test on physical device)
 - [ ] Format selection screen functional
 - [ ] **First TestFlight build uploaded and testable**
 
 ***
 
-### 13.3 Week 2 Deliverables
+### 14.3 Week 2 Deliverables
 
-- [ ] Full reflection flow works (3 prompts + feedback)
+- [ ] Full reflection flow works (3 prompts + feedback with 0-4 rating scale)
 - [ ] Reflections saved to DB with correct session linkage
 - [ ] Reflection state badges show correctly (pending/overdue/expired)
-- [ ] Timeline shows session history with detail modal
+- [ ] Timeline shows session history with duration and target comparison
 - [ ] **Second TestFlight build with full reflection flow**
 
 ***
 
-### 13.4 Week 3 Deliverables
+### 14.4 Week 3 Deliverables
 
-- [ ] Export produces valid JSON with all metadata
+- [ ] Export produces valid JSON with target duration metadata
 - [ ] Move session works (with and without reflection)
 - [ ] Delete session works (blocks if reflection exists)
 - [ ] Edit reflection works (within 48h only)
@@ -1532,7 +1724,28 @@ useEffect(() => {
 
 ***
 
-## 14. Final Questions \& Decisions Log
+## 15. Success Metrics (Post-Launch)
+
+**Tracked via export data analysis (manual):**
+
+- **Engagement:** Average sessions per week (target: 3+)
+- **Target adherence:** % of sessions with target set (track adoption)
+- **Target completion:** % of sessions that met or exceeded target duration
+- **Reflection completion:** % of sessions with completed reflections within 48h (target: >70%)
+- **Format usage:** Distribution of Direct/Reflective/Minimalist (identify preferences)
+- **Reflection feedback:** % of "Good/Helpful" (3) or "Great/Energizing" (4) ratings (target: >60%)
+- **Edit frequency:** % of reflections edited (track if feature is valuable)
+- **Series continuity:** Average chain length per Practice Area (longer = better engagement)
+
+**Privacy compliance:**
+
+- [ ] 100% local storage (no network requests)
+- [ ] Data encrypted at rest (SQLCipher)
+- [ ] Export is plaintext JSON (user controls sharing)
+
+***
+
+## 16. Final Questions \& Decisions Log
 
 **Resolved during spec discussion:**
 
@@ -1545,51 +1758,25 @@ useEffect(() => {
 7. **Move sessions:** Allow with reflection intact (rare mistake correction) ✅
 8. **Delete sessions:** Only if no reflection exists (soft delete) ✅
 9. **Export metadata:** Include `updated_at` and computed `is_edited` flag ✅
-10. **Analytics:** None; all analysis via manual export ✅
+10. **Feedback rating:** 0-4 scale (0=Confusing, 1=Hard, 2=Neutral, 3=Good, 4=Great) ✅
+11. **Target duration:** Optional target with 15/30/45/60 min presets, notification when reached ✅
+12. **Analytics:** None; all analysis via manual export ✅
 
 ***
 
-## 15. Success Metrics (Post-Launch)
-
-**Tracked via export data analysis (manual):**
-
-- **Engagement:** Average sessions per week (target: 3+)
-- **Reflection completion:** % of sessions with completed reflections within 48h (target: >70%)
-- **Format usage:** Distribution of Direct/Reflective/Minimalist (identify preferences)
-- **Reflection feedback:** % of "Good/Helpful" or "Great/Energizing" ratings (target: >60%)
-- **Edit frequency:** % of reflections edited (track if feature is valuable)
-- **Series continuity:** Average chain length per Practice Area (longer = better engagement)
-
-**Privacy compliance:**
-
-- [ ] 100% local storage (no network requests)
-- [ ] Data encrypted at rest (SQLCipher)
-- [ ] Export is plaintext JSON (user controls sharing)
-
-***
-
-## 16. Contact \& Support
+## 17. Contact \& Support
 
 **For Developer:**
 
 - This spec assumes solo development by profile in[^1]
 - Use LLM assistance for documentation, test generation, and complex logic debugging
-- Flag blocking issues early (Wispr Flow integration, SQLite edge cases, navigation quirks)
+- Flag blocking issues early (Wispr Flow integration, SQLite edge cases, navigation quirks, notification permissions)
 
 **For Product Owner:**
 
 - Review TestFlight builds weekly (Week 1, 2, 3)
 - Provide feedback via shared doc or direct messages
-- Test with real Wispr Flow on physical iPhone
-- Export data weekly to verify JSON structure and metadata
-
-***
-
-**END OF TECHNICAL SPECIFICATION**
-
-***
-
-This spec is ready for implementation. The developer can start Week 1 with clear tasks, dependencies, and acceptance criteria. All design decisions are locked, and the timeline accounts for realistic development pace with buffer for TestFlight testing cycles.
+- Test with real
 
 <div align="center">⁂</div>
 
@@ -1597,7 +1784,9 @@ This spec is ready for implementation. The developer can start Week 1 with clear
 
 [^2]: Kolbs-Cycle-App-PRD.md
 
-[^3]: https://dev.to/cristiansifuentes/react-state-management-in-2025-context-api-vs-zustand-385m
+[^3]: https://chat2db.ai/resources/blog/uuid-auto-increment-integer
 
-[^4]: https://dev.to/shubhamtiwari909/react-context-api-vs-zustand-pki
+[^4]: https://stackoverflow.com/questions/14184861/android-use-uuid-as-primary-key-in-sqlite
+
+[^5]: https://highperformancesqlite.com/articles/sqlite-primary-keys
 

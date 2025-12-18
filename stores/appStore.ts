@@ -49,6 +49,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   currentSession: null,
   sessionStartTime: null,
   sessionTimer: 0,
+  targetDuration: null,
+  targetReached: false,
 
   // ============================================================================
   // Reflection Draft State
@@ -82,33 +84,51 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   /**
    * Start a new session - initializes timer state
+   * @param session - The session object to start
+   * @param targetDuration - Optional target duration in seconds (null = no target)
    */
-  startSession: (session: Session) =>
+  startSession: (session: Session, targetDuration: number | null = null) =>
     set({
       currentSession: session,
       sessionStartTime: Date.now(),
       sessionTimer: 0,
+      targetDuration,
+      targetReached: false,
     }),
 
   /**
    * Update the session timer based on elapsed time since start
+   * Also checks if target duration was just reached (transition from not reached to reached)
    * Call this every second via setInterval
    */
   updateTimer: () =>
-    set((state) => ({
-      sessionTimer: state.sessionStartTime
+    set((state) => {
+      const newTimer = state.sessionStartTime
         ? Math.floor((Date.now() - state.sessionStartTime) / 1000)
-        : 0,
-    })),
+        : 0;
+
+      // Check if target was just reached (transition from not reached to reached)
+      const targetJustReached =
+        state.targetDuration &&
+        !state.targetReached &&
+        newTimer >= state.targetDuration;
+
+      return {
+        sessionTimer: newTimer,
+        targetReached: state.targetReached || targetJustReached,
+      };
+    }),
 
   /**
-   * End the current session - clears all session state
+   * End the current session - clears all session state including target fields
    */
   endSession: () =>
     set({
       currentSession: null,
       sessionStartTime: null,
       sessionTimer: 0,
+      targetDuration: null,
+      targetReached: false,
     }),
 
   // ============================================================================

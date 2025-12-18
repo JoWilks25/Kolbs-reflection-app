@@ -17,6 +17,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const setPracticeAreas = useAppStore((state) => state.setPracticeAreas);
   const sessionTimer = useAppStore((state) => state.sessionTimer);
   const currentSession = useAppStore((state) => state.currentSession);
+  const targetDuration = useAppStore((state) => state.targetDuration);
+  const targetReached = useAppStore((state) => state.targetReached);
   const startSession = useAppStore((state) => state.startSession);
   const updateTimer = useAppStore((state) => state.updateTimer);
   const endSession = useAppStore((state) => state.endSession);
@@ -31,18 +33,45 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     ]);
   }, [setPracticeAreas]);
 
-  // Test: Timer functionality
+  // Test: Timer functionality (no target)
   const handleStartTimer = () => {
-    // Create a test session
-    startSession({
-      id: 'test-session-1',
-      practice_area_id: '1',
-      previous_session_id: null,
-      intent: 'Test session intent',
-      started_at: Date.now(),
-      ended_at: null,
-      is_deleted: 0,
-    });
+    // Create a test session without target duration
+    startSession(
+      {
+        id: 'test-session-1',
+        practice_area_id: '1',
+        previous_session_id: null,
+        intent: 'Test session intent',
+        target_duration_seconds: null,
+        started_at: Date.now(),
+        ended_at: null,
+        is_deleted: 0,
+      },
+      null
+    );
+
+    // Start timer interval
+    timerRef.current = setInterval(() => {
+      updateTimer();
+    }, 1000);
+  };
+
+  // Test: Timer with target duration (10 seconds for quick testing)
+  const handleStartTimerWithTarget = () => {
+    // Create a test session with 10 second target
+    startSession(
+      {
+        id: 'test-session-2',
+        practice_area_id: '1',
+        previous_session_id: null,
+        intent: 'Test session with target',
+        target_duration_seconds: 10,
+        started_at: Date.now(),
+        ended_at: null,
+        is_deleted: 0,
+      },
+      10
+    );
 
     // Start timer interval
     timerRef.current = setInterval(() => {
@@ -90,13 +119,23 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       <View style={styles.timerSection}>
         <Text style={styles.subtitle}>Timer Test:</Text>
         <Text style={styles.timerDisplay}>{formatTimer(sessionTimer)}</Text>
+        {targetDuration !== null && (
+          <Text style={styles.targetInfo}>
+            Target: {formatTimer(targetDuration)} / Reached: {targetReached ? 'Yes' : 'No'}
+          </Text>
+        )}
         <Text style={styles.sessionStatus}>
           Session: {currentSession ? 'Active' : 'None'}
         </Text>
         <View style={styles.buttonRow}>
           <Button
-            title="Start Timer"
+            title="Start (No Target)"
             onPress={handleStartTimer}
+            disabled={currentSession !== null}
+          />
+          <Button
+            title="Start (10s Target)"
+            onPress={handleStartTimerWithTarget}
             disabled={currentSession !== null}
           />
           <Button
@@ -164,6 +203,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.md,
     marginTop: SPACING.sm,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  targetInfo: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.warning,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    marginVertical: SPACING.xs,
   },
 });
 

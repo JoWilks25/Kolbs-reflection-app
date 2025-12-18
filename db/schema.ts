@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   practice_area_id TEXT NOT NULL,
   previous_session_id TEXT,       -- NULL only for first session in a Practice Area
   intent TEXT NOT NULL,
+  target_duration_seconds INTEGER,  -- NULL = no target, just stopwatch
   started_at INTEGER NOT NULL,
   ended_at INTEGER,               -- NULL if session still active
   is_deleted INTEGER DEFAULT 0,
