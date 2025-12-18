@@ -1,0 +1,285 @@
+Title,Description,EstimateHours,Priority
+HomeScreen: Practice Area List – Load & Display,"**Goal**
+Implement the HomeScreen Practice Area list that loads Practice Areas from the local SQLite database and displays them with session metadata, enabling navigation into the session flow.
+
+## Implementation Overview
+- Render a FlatList of all non-deleted Practice Areas.
+- For each Practice Area, show:
+  - Name.
+  - Last session date (if any) using `formatDate(...)`.
+  - Total number of sessions (e.g., `12 sessions`).
+- Show an empty state message when there are no Practice Areas yet.
+- Support pull-to-refresh to reload from the database.
+- On tap, navigate to `SessionSetupScreen` with the selected `practiceAreaId`.
+
+## Implementation Steps
+1. **DB query helper**
+   - In `db/queries.ts`, add a helper like `getPracticeAreasWithStats(db)` that runs: 
+   ```sql
+   SELECT pa.*,
+          COUNT(s.id) AS sessionCount,
+          MAX(s.startedat) AS lastSessionDate
+   FROM practiceareas pa
+   LEFT JOIN sessions s
+     ON s.practiceareaid = pa.id
+    AND s.isdeleted = 0
+   WHERE pa.isdeleted = 0
+   GROUP BY pa.id
+   ORDER BY pa.createdat DESC;
+   ```
+   - Return a typed result including `id`, `name`, `createdat`, `sessionCount`, `lastSessionDate`.
+
+2. **Wire into Zustand**
+   - In `stores/appStore.ts`, ensure there is:
+     - `practiceAreas` state (array).
+     - `setPracticeAreas(areas)` action.
+   - Create a small loader function in `HomeScreen` that calls the DB helper and then `setPracticeAreas(...)`.
+
+3. **HomeScreen UI – FlatList**
+   - In `screens/HomeScreen.tsx`:
+     - Use `useAppStore` to read `practiceAreas`.
+     - Render a FlatList where each item shows:
+       - Practice Area name.
+       - Last session date: if `lastSessionDate` exists, render `formatDate(lastSessionDate)`; otherwise show `""No sessions yet""`.
+       - Session count badge (e.g., `""3 sessions""` / `""1 session""` with simple pluralization).
+     - Implement `onRefresh` to re-run the loader function.
+     - Handle loading state (initial skeleton or simple ActivityIndicator).
+
+4. **Empty state**
+   - If `practiceAreas.length === 0`, show a friendly message:
+     - Title: `""No Practice Areas yet""`.
+     - Body: `""Create a Practice Area to start tracking your practice sessions.""`.
+
+5. **Navigation**
+   - On row press, navigate to `SessionSetupScreen` with params: `{ practiceAreaId: item.id }`.
+   - Ensure `RootStackNavigator` is already wired with `SessionSetupScreen`.
+
+## Files Created / Modified
+- **Created/Updated:**
+  - `db/queries.ts` – add `getPracticeAreasWithStats(...)`.
+  - `screens/HomeScreen.tsx` – FlatList implementation and data loading.
+- **Used:**
+  - `stores/appStore.ts` – `practiceAreas` + `setPracticeAreas`.
+  - `utils/timeFormatting.ts` – `formatDate(...)`.
+  - Navigation stack – `SessionSetupScreen` route.
+
+## Acceptance Criteria
+- HomeScreen shows a FlatList of all non-deleted Practice Areas loaded from the DB.
+- Each row shows: name, last session date (or `""No sessions yet""`), and session count.
+- Pull-to-refresh reloads data from SQLite and updates the UI.
+- When no Practice Areas exist, the empty state message is shown instead of the list.
+- Tapping a Practice Area navigates to `SessionSetupScreen` with the correct `practiceAreaId`.
+- No unhandled errors when the DB has zero sessions or zero Practice Areas.
+
+## Estimate
+**2.5 hours**
+",3,High
+HomeScreen: Create Practice Area Modal,"**Goal**
+Allow users to create new Practice Areas from the HomeScreen via a simple modal with validation and persistence to SQLite.
+
+## Implementation Overview
+- Add a persistent ""New Practice Area"" button on HomeScreen.
+- Show a modal with a single text input for the Practice Area name.
+- Validate input (non-empty, max 100 characters).
+- On submit, create a new Practice Area record in the DB and refresh the list.
+
+## Implementation Steps
+1. **UI – New Practice Area button**
+   - In `HomeScreen`, render a primary button at the bottom: `""New Practice Area""`.
+   - On press, open a controlled modal state (`isCreateModalVisible`).
+
+2. **Create Modal component**
+   - Inside `HomeScreen.tsx` (or a small local component):
+     - TextInput with placeholder: `""Practice Area name""`.
+     - Character limit: 100 characters (show a subtle counter or prevent typing beyond limit).
+     - Buttons: ""Cancel"" and ""Create"".
+   - Validation:
+     - Name must be non-empty (trim whitespace).
+     - If invalid, show inline helper text (e.g., `""Please enter a name""`).
+
+3. **DB insert helper**
+   - In `db/queries.ts`, add `createPracticeArea(db, name)` that:
+     - Generates an ID via `generateId()`.
+     - Sets `createdat = Date.now()`.
+     - Inserts: 
+       ```sql
+       INSERT INTO practiceareas (id, name, createdat, isdeleted)
+       VALUES (?, ?, ?, 0);
+       ```
+   - Return the created record or simply success.
+
+4. **Wire up create flow**
+   - On ""Create"" press:
+     - Disable button while saving.
+     - Call `createPracticeArea(...)`.
+     - On success:
+       - Close modal.
+       - Trigger reload of Practice Areas (reuse loader from Ticket 1).
+       - Show success toast: `""Practice Area created""`.
+     - On error: show error toast.
+
+5. **State handling**
+   - Clear input when modal closes (either on Cancel or after success).
+
+## Files Created / Modified
+- **Modified:**
+  - `screens/HomeScreen.tsx` – New Practice Area button + modal.
+  - `db/queries.ts` – `createPracticeArea(...)`.
+- **Used:**
+  - `utils/uuid.ts` – `generateId()`.
+  - Toast/notification helper (or simple Alert for errors).
+
+## Acceptance Criteria
+- ""New Practice Area"" button is visible on HomeScreen.
+- Tapping the button opens a modal with a text input and Cancel/Create buttons.
+- Cannot create a Practice Area with an empty name (error shown, no DB write).
+- Cannot exceed 100 characters in the name field.
+- On valid input, a Practice Area row is inserted into `practiceareas` with `isdeleted = 0`.
+- After creation, the HomeScreen list refreshes and shows the new Practice Area.
+- Modal closes on success or when tapping Cancel.
+- A success message is visible after creating a Practice Area.
+
+## Estimate
+**1 hour**
+",1,High
+HomeScreen: Pending Reflections Banner,"**Goal**
+Surface pending and overdue reflections on the HomeScreen via a banner that guides users back to complete reflections within the 48-hour window.
+
+## Implementation Overview
+- Show a banner at the top of HomeScreen when there are sessions with no reflection completed and `endedat` is within the last 48 hours.
+- Distinguish between Pending (0–24h) and Overdue (24–48h).
+- Show aggregated count and time remaining.
+- On tap, navigate to SeriesTimelineScreen and auto-focus the earliest pending session.
+
+## Implementation Steps
+1. **DB query helper**
+   - In `db/queries.ts`, add `getPendingReflections(db)` that runs: 
+   ```sql
+   SELECT s.*, pa.name AS practiceAreaName
+   FROM sessions s
+   LEFT JOIN reflections r ON r.sessionid = s.id
+   LEFT JOIN practiceareas pa ON pa.id = s.practiceareaid
+   WHERE r.id IS NULL
+     AND s.endedat IS NOT NULL
+     AND s.isdeleted = 0
+     AND (? - s.endedat) <= ?  -- within 48h
+   ORDER BY s.endedat ASC;
+   ```
+   - Use `Date.now()` for `?` and `48h` in ms for the window.
+
+2. **State & wiring**
+   - In `HomeScreen`, on focus or mount:
+     - Call `getPendingReflections(...)`.
+     - Store the result locally in component state or via `pendingReflectionsCount` in Zustand.
+   - Derive:
+     - `totalCount` = number of rows.
+     - `oldest` = first row (earliest `endedat`).
+     - Hours since end = `(Date.now() - oldest.endedat) / (1000 * 60 * 60)`.
+
+3. **Banner copy & severity**
+   - If `totalCount === 0`: render nothing.
+   - Else: compute state for oldest session:
+     - If `< 24h`: Pending.
+     - If `>= 24h` and `< 48h`: Overdue.
+   - Example text:
+     - Pending: `""1 reflection due (20h remaining)""` or `""2 reflections due (18h remaining)""`.
+     - Overdue: `""1 reflection overdue (20h left before expiry)""` or `""2 reflections overdue (18h left)""`.
+   - Style:
+     - Pending: yellow / warning style.
+     - Overdue: orange / error style.
+
+4. **Navigation behavior**
+   - On banner press:
+     - Navigate to `SeriesTimelineScreen` with params `{ practiceAreaId: oldest.practiceareaid, focusSessionId: oldest.id }`.
+     - SeriesTimelineScreen will handle scroll-to-session logic (out of scope for this ticket but align with spec).
+
+5. **Integration with store**
+   - Optionally update `pendingReflectionsCount` in `useAppStore` with `totalCount`.
+   - This can be reused in other parts of the UI later.
+
+## Files Created / Modified
+- **Modified:**
+  - `screens/HomeScreen.tsx` – banner component and data loading.
+  - `db/queries.ts` – `getPendingReflections(...)`.
+- **Used:**
+  - `stores/appStore.ts` – `pendingReflectionsCount` (optional).
+  - `utils/timeFormatting.ts` – for converting ms/seconds into hours remaining text.
+  - Navigation – `SeriesTimelineScreen` route.
+
+## Acceptance Criteria
+- When there are no sessions awaiting reflection within 48h, no banner is shown.
+- When there are eligible sessions, a banner is shown at the top of HomeScreen.
+- Banner correctly reflects: total number of pending/overdue reflections and rough time remaining based on the oldest session.
+- Pending state (< 24h) uses a warning/yellow style; Overdue (24–48h) uses a stronger/orange style.
+- Tapping the banner navigates to `SeriesTimelineScreen` for the relevant Practice Area and focuses the oldest pending session.
+- Banner updates when returning to HomeScreen after completing reflections or when time passes (on focus refresh).
+- No unhandled errors when there are many sessions or none.
+
+## Estimate
+**2.5 hours**
+",3,Medium
+HomeScreen: Settings Icon & Security Warning,"**Goal**
+Add a Settings entry point and a security warning banner on HomeScreen to encourage enabling device lock for better privacy.
+
+## Implementation Overview
+- Add a Settings icon (gear) in the HomeScreen header that navigates to `SettingsScreen`.
+- Show a dismissible security warning banner if device lock (Face ID / passcode) is not enabled.
+- Allow the user to dismiss the banner for the current app run.
+
+## Implementation Steps
+1. **Settings icon in header**
+   - In `RootStackNavigator` or `HomeScreen` options, add a headerRight icon (gear).
+   - On press, navigate to `SettingsScreen`.
+
+2. **Security service**
+   - In `services/securityService.ts`, implement `checkDeviceSecurity()` using `expo-local-authentication`:
+   ```typescript
+   import * as LocalAuthentication from 'expo-local-authentication';
+
+   export const checkDeviceSecurity = async (): Promise<boolean> => {
+     try {
+       const result = await LocalAuthentication.getEnrolledLevelAsync();
+       // Treat any enrolled auth (passcode/biometric) as secure enough
+       return result !== LocalAuthentication.SecurityLevel.NONE;
+     } catch (e) {
+       console.warn('Failed to check device security', e);
+       return false;
+     }
+   };
+   ```
+
+3. **Zustand wiring**
+   - Ensure `useAppStore` has:
+     - `showSecurityWarning: boolean` (default: `false`).
+     - `setShowSecurityWarning(show: boolean)`.
+   - In `HomeScreen`, on mount:
+     - Call `checkDeviceSecurity()`.
+     - If result is `false`, set `showSecurityWarning(true)`.
+
+4. **Warning banner UI**
+   - In `HomeScreen` above the Practice Area list:
+     - If `showSecurityWarning` is true, render a small banner:
+       - Text: `""Enable device lock (Face ID/passcode) for better privacy.""`.
+       - A ""Dismiss"" button or X icon on the right.
+     - On dismiss press: call `setShowSecurityWarning(false)`.
+   - Banner should not block usage of the app; it is informational only.
+
+## Files Created / Modified
+- **Created:**
+  - `services/securityService.ts` – `checkDeviceSecurity(...)`.
+- **Modified:**
+  - `stores/appStore.ts` – add `showSecurityWarning` + `setShowSecurityWarning`.
+  - `screens/HomeScreen.tsx` – header settings icon + warning banner.
+  - Navigation config – ensure `SettingsScreen` route exists.
+
+## Acceptance Criteria
+- A gear icon appears in the HomeScreen header.
+- Tapping the gear navigates to `SettingsScreen`.
+- If device lock is not enabled, a banner appears on HomeScreen with a privacy warning message.
+- Tapping ""Dismiss"" hides the banner for the session (until app restart or logic change).
+- If device lock is enabled, the banner does not appear.
+- No crashes if `expo-local-authentication` fails; the app continues with a safe default.
+
+## Estimate
+**0.5 hours**
+",1,Low
