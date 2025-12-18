@@ -79,7 +79,16 @@ export const APP_CONSTANTS = {
     HOURS_24: 24 * 60 * 60 * 1000,  // 24 hours in milliseconds
     HOURS_48: 48 * 60 * 60 * 1000,  // 48 hours in milliseconds
   },
+  EDIT_WINDOW_48H: 48 * 60 * 60 * 1000, // 48h in ms - reflection edit window
 } as const;
+
+// Target duration presets (in seconds)
+export const TARGET_DURATION_PRESETS = [
+  { label: '15 min', seconds: 15 * 60 },
+  { label: '30 min', seconds: 30 * 60 },
+  { label: '45 min', seconds: 45 * 60 },
+  { label: '60 min', seconds: 60 * 60 },
+];
 
 // Export a complete theme object for convenience
 export const THEME = {
