@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, Button } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
+import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -24,14 +25,16 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff",
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.background,
+    padding: SPACING.md,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "600",
-    marginBottom: 16,
+    fontSize: TYPOGRAPHY.fontSize.xxl,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.md,
   },
 });
 
