@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import RootStackNavigator from "./navigation/RootStackNavigator";
 import { initDatabase, getDatabase } from "./db/migrations";
+import { THEME } from "./utils/constants";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -42,7 +43,7 @@ export default function App() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
+        <ActivityIndicator size="large" color={THEME.colors.primary} />
         <Text style={styles.loadingText}>Initializing database...</Text>
       </View>
     );
@@ -65,25 +66,26 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: THEME.colors.background,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
+    marginTop: THEME.spacing.md,
+    fontSize: THEME.typography.fontSize.md,
+    color: THEME.colors.text.secondary,
+    fontWeight: THEME.typography.fontWeight.regular,
   },
   errorText: {
-    fontSize: 18,
-    color: '#d32f2f',
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontSize: THEME.typography.fontSize.lg,
+    color: THEME.colors.error,
+    fontWeight: THEME.typography.fontWeight.bold,
+    marginBottom: THEME.spacing.sm,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: THEME.spacing.lg,
   },
   errorSubtext: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: THEME.typography.fontSize.sm,
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: THEME.spacing.lg,
   },
 });
