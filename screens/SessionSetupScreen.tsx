@@ -82,7 +82,6 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     if (selectedDuration === seconds) {
       setSelectedDuration(null); // Deselect if already selected
     } else {
-      ``
       setSelectedDuration(seconds);
     }
   };
