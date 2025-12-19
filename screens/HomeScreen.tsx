@@ -15,7 +15,6 @@ import { useAppStore } from '../stores/appStore';
 import { PracticeAreaWithStats } from '../utils/types';
 import { formatDate } from '../utils/timeFormatting';
 import { getPracticeAreas } from "../db/queries";
-import { generateId } from "../utils";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -71,7 +70,7 @@ const EmptyState: React.FC = () => (
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // Get state from store
   const practiceAreas = useAppStore((state) => state.practiceAreas) as PracticeAreaWithStats[];
-  const setPraticeAreas = useAppStore(state => state.setPracticeAreas);
+  const setPracticeAreas = useAppStore(state => state.setPracticeAreas);
 
   // Pull-to-refresh state (user will manage this)
   const [refreshing, setRefreshing] = useState(false);
@@ -83,7 +82,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     setIsLoading(true);
     try {
       const practiceAreas: PracticeAreaWithStats[] = await getPracticeAreas();
-      setPraticeAreas(practiceAreas);
+      setPracticeAreas(practiceAreas);
     } catch (error) {
       console.error('Error loading practice areas:', error);
     } finally {

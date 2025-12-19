@@ -11,7 +11,7 @@ import { getDatabase } from './migrations';
 // Example structure for future query helpers:
 export async function getPracticeAreas(): Promise<PracticeAreaWithStats[]> {
   const db = getDatabase();
-  return await db.getAllAsync(`
+  const results = await db.getAllAsync<any>(`
     SELECT pa.*,
            COUNT(s.id) AS sessionCount,
            MAX(s.started_at) AS lastSessionDate
@@ -23,5 +23,12 @@ export async function getPracticeAreas(): Promise<PracticeAreaWithStats[]> {
     GROUP BY pa.id
     ORDER BY pa.created_at DESC
   `);
+
+  // Ensure proper type casting
+  return results.map(row => ({
+    ...row,
+    sessionCount: Number(row.sessionCount) || 0,
+    lastSessionDate: row.lastSessionDate ? Number(row.lastSessionDate) : null,
+  })) as PracticeAreaWithStats[];
 }
 
