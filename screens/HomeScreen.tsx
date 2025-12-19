@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
 import { PracticeAreaWithStats } from '../utils/types';
 import { formatDate } from '../utils/timeFormatting';
+import { getPracticeAreas } from "../db/queries";
+import { generateId } from "../utils";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -69,17 +71,35 @@ const EmptyState: React.FC = () => (
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // Get state from store
   const practiceAreas = useAppStore((state) => state.practiceAreas) as PracticeAreaWithStats[];
+  const setPraticeAreas = useAppStore(state => state.setPracticeAreas);
 
   // Pull-to-refresh state (user will manage this)
   const [refreshing, setRefreshing] = useState(false);
 
   // Loading state placeholder (user will manage this)
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadPracticeAreas = async () => {
+    setIsLoading(true);
+    try {
+      const practiceAreas: PracticeAreaWithStats[] = await getPracticeAreas();
+      setPraticeAreas(practiceAreas);
+    } catch (error) {
+      console.error('Error loading practice areas:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadPracticeAreas();
+  }, []);
 
   // Refresh handler placeholder - user will implement
   const handleRefresh = async () => {
     setRefreshing(true);
     // User will implement data loading here
+    await loadPracticeAreas();
     setRefreshing(false);
   };
 

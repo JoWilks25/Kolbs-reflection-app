@@ -125,8 +125,8 @@ export interface AppState {
  */
 export interface AppActions {
   // Practice Area actions
-  setPracticeAreas: (areas: PracticeArea[]) => void;
-  setCurrentPracticeArea: (practiceArea: PracticeArea | null) => void;
+  setPracticeAreas: (areas: PracticeAreaWithStats[]) => void;
+  setCurrentPracticeArea: (practiceArea: PracticeAreaWithStats | null) => void;
 
   // Session actions
   startSession: (session: Session, targetDuration?: number | null) => void;
