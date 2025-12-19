@@ -6,12 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
-import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
-import { getPreviousSessionIntent, getPracticeAreaById } from "../db/queries";
+import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS } from "../utils/constants";
+import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionForPracticeArea, createSession } from "../db/queries";
+import { useAppStore } from "../stores/appStore";
+import { generateId } from "../utils/uuid";
 
 type SessionSetupScreenRouteProp = RouteProp<RootStackParamList, "SessionSetup">;
 type SessionSetupScreenNavigationProp = StackNavigationProp<RootStackParamList, "SessionSetup">;
@@ -23,11 +26,16 @@ type Props = {
 const SessionSetupScreen: React.FC<Props> = ({ route }) => {
   const { practiceAreaId } = route.params;
   const navigation = useNavigation<SessionSetupScreenNavigationProp>();
+  const { startSession } = useAppStore();
 
   const [previousIntent, setPreviousIntent] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [practiceAreaName, setPracticeAreaName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+
+  // New session input state
+  const [intentText, setIntentText] = useState("");
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -42,7 +50,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
         }
 
         // Load previous session intent
-        const result = await getPreviousSessionIntent(practiceAreaId);
+        const result = await getPreviousSessionIntent(practiceAreaId) as any;
         if (!result) {
           setPreviousIntent("No previous sessions");
         } else if (!result.previous_next_action) {
@@ -61,14 +69,70 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     loadData();
   }, [practiceAreaId, navigation]);
 
-  const shouldShowCollapsible = previousIntent.length > 100 && 
-    previousIntent !== "No previous sessions" && 
+  const shouldShowCollapsible = previousIntent.length > 100 &&
+    previousIntent !== "No previous sessions" &&
     previousIntent !== "No previous intent recorded" &&
     previousIntent !== "Error loading previous intent";
 
   const displayText = shouldShowCollapsible && !isExpanded
     ? previousIntent.substring(0, 100) + "..."
     : previousIntent;
+
+  const handlePresetPress = (seconds: number) => {
+    if (selectedDuration === seconds) {
+      setSelectedDuration(null); // Deselect if already selected
+    } else {
+      ``
+      setSelectedDuration(seconds);
+    }
+  };
+
+  const handleUsePreviousIntent = () => {
+    // Only use the actual previous intent text, not placeholder messages
+    if (previousIntent &&
+      previousIntent !== "No previous sessions" &&
+      previousIntent !== "No previous intent recorded" &&
+      previousIntent !== "Error loading previous intent") {
+      setIntentText(previousIntent);
+    }
+  };
+
+  const hasValidPreviousIntent = previousIntent &&
+    previousIntent !== "No previous sessions" &&
+    previousIntent !== "No previous intent recorded" &&
+    previousIntent !== "Error loading previous intent";
+
+  const handleStartSession = async () => {
+    try {
+      // Get the last session for this practice area to link as previous_session_id
+      const lastSession = await getLastSessionForPracticeArea(practiceAreaId);
+
+      // Create new session object
+      const newSession = {
+        id: generateId(),
+        practice_area_id: practiceAreaId,
+        previous_session_id: lastSession?.id || null,
+        intent: intentText.trim(),
+        target_duration_seconds: selectedDuration,
+        started_at: Date.now(),
+        ended_at: null,
+      };
+
+      // Insert into database
+      await createSession(newSession);
+
+      // Update Zustand store
+      startSession({ ...newSession, is_deleted: 0 }, selectedDuration);
+
+      // Navigate to SessionActive screen
+      navigation.navigate("SessionActive");
+    } catch (error) {
+      console.error("Error starting session:", error);
+      // TODO: Show error to user
+    }
+  };
+
+  const isStartDisabled = intentText.trim().length === 0;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -77,21 +141,89 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : (
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Last time you planned to...</Text>
-          <Text style={styles.cardText}>{displayText}</Text>
-          {shouldShowCollapsible && (
-            <TouchableOpacity
-              onPress={() => setIsExpanded(!isExpanded)}
-              style={styles.toggleButton}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.toggleButtonText}>
-                {isExpanded ? "Show less" : "Show more"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <>
+          {/* Previous Intent Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Last time you planned to...</Text>
+            <Text style={styles.cardText}>{displayText}</Text>
+            {shouldShowCollapsible && (
+              <TouchableOpacity
+                onPress={() => setIsExpanded(!isExpanded)}
+                style={styles.toggleButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleButtonText}>
+                  {isExpanded ? "Show less" : "Show more"}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {hasValidPreviousIntent && (
+              <TouchableOpacity
+                onPress={handleUsePreviousIntent}
+                style={styles.useIntentButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.useIntentButtonText}>Use this intent</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Intent Input Section */}
+          <View style={styles.inputSection}>
+            <Text style={styles.inputLabel}>What is your intent or micro-goal for today?</Text>
+            <TextInput
+              style={styles.intentInput}
+              multiline
+              placeholder="Enter your intent..."
+              placeholderTextColor={COLORS.text.disabled}
+              value={intentText}
+              onChangeText={setIntentText}
+              textAlignVertical="top"
+            />
+          </View>
+
+          {/* Target Duration Section */}
+          <View style={styles.durationSection}>
+            <Text style={styles.inputLabel}>Practice duration (optional)</Text>
+            <View style={styles.presetButtonsContainer}>
+              {TARGET_DURATION_PRESETS.map((preset) => (
+                <TouchableOpacity
+                  key={preset.seconds}
+                  style={[
+                    styles.presetButton,
+                    selectedDuration === preset.seconds && styles.presetButtonSelected,
+                  ]}
+                  onPress={() => handlePresetPress(preset.seconds)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.presetButtonText,
+                      selectedDuration === preset.seconds && styles.presetButtonTextSelected,
+                    ]}
+                  >
+                    {preset.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.helpText}>
+              You'll get a notification when time is up, but can continue practicing.
+            </Text>
+          </View>
+
+          {/* Start Session Button */}
+          <TouchableOpacity
+            style={[styles.startButton, isStartDisabled && styles.startButtonDisabled]}
+            onPress={handleStartSession}
+            disabled={isStartDisabled}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.startButtonText, isStartDisabled && styles.startButtonTextDisabled]}>
+              Start Session
+            </Text>
+          </TouchableOpacity>
+        </>
       )}
     </ScrollView>
   );
@@ -104,6 +236,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: SPACING.md,
+    paddingBottom: SPACING.xl,
   },
   loadingContainer: {
     flex: 1,
@@ -115,6 +248,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: SPACING.md,
+    marginBottom: SPACING.md,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -146,6 +280,112 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.sm,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
     color: COLORS.primary,
+  },
+  useIntentButton: {
+    marginTop: SPACING.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  useIntentButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
+  },
+  inputSection: {
+    marginBottom: SPACING.md,
+  },
+  inputLabel: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.sm,
+  },
+  intentInput: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.primary,
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: COLORS.neutral[200],
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  durationSection: {
+    marginBottom: SPACING.lg,
+  },
+  presetButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  presetButton: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    borderWidth: 2,
+    borderColor: COLORS.neutral[200],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  presetButtonSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  presetButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+  },
+  presetButtonTextSelected: {
+    color: COLORS.text.inverse,
+  },
+  helpText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.fontSize.sm * TYPOGRAPHY.lineHeight.normal,
+    fontStyle: "italic",
+  },
+  startButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  startButtonDisabled: {
+    backgroundColor: COLORS.neutral[200],
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  startButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.inverse,
+  },
+  startButtonTextDisabled: {
+    color: COLORS.text.disabled,
   },
 });
 
