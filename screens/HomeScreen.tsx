@@ -15,14 +15,14 @@ import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
 import { PracticeAreaWithStats, PendingReflection } from '../utils/types';
-import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestPendingReflections } from "../db/queries";
+import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestData } from "../db/queries";
 import { getDatabase } from "../db/migrations";
 import PendingReflectionsBanner from "../components/PendingReflectionsBanner";
 import PracticeAreaItem from "../components/PracticeAreaItem";
 import EmptyState from "../components/EmptyState";
 import CreatePracticeAreaModal from "../components/CreatePracticeAreaModal";
-import SecurityWarningBanner from "../components/SecurityWarningBanner";
 import { checkDeviceSecurity } from "../services/securityService";
+import SecurityWarningBanner from "../components/SecurityWarningBanner";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -100,7 +100,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // Uncomment and modify
   const handleInsertTestData = async () => {
     try {
-      await insertTestPendingReflections();
+      await insertTestData();
       await loadPracticeAreas();
       await loadPendingReflections();
       Alert.alert('Test Data', 'Test pending reflections data inserted');

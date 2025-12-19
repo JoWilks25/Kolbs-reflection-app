@@ -135,60 +135,110 @@ export async function getPendingReflections(): Promise<any[]> {
 }
 
 /**
- * Insert test data for pending reflections (for development/testing)
- * Creates multiple practice areas with sessions at various time points
+ * Insert test data for SessionSetupScreen acceptance criteria testing
+ * Creates practice areas covering:
+ * 1. Normal case: Previous session with reflection (step4_answer)
+ * 2. No reflection: Previous session but no reflection
+ * 3. No sessions: Practice area with no sessions
+ * 4. Long text: Previous session with long step4_answer (>100 chars) for collapsible test
+ * 5. Deleted sessions: Should be filtered out by query
  */
-export async function insertTestPendingReflections(): Promise<void> {
+export async function insertTestData(): Promise<void> {
   const db = getDatabase();
   const now = Date.now();
 
-  // Define test practice areas with their sessions
+  // Test data structure for SessionSetupScreen
   const testData = [
     {
       practiceAreaName: 'Piano Practice',
+      description: 'Normal case: Has previous session with reflection',
       sessions: [
         {
-          hoursAgo: 10, // Pending state (< 24h)
+          hoursAgo: 2,
           intent: 'Worked on Chopin Nocturne Op. 9 No. 2',
           durationMinutes: 45,
+          hasReflection: true,
+          reflection: {
+            format: 1, // Direct
+            step2_answer: 'Practiced the main theme and worked on the left hand accompaniment pattern. Struggled with the trills in the middle section.',
+            step3_answer: 'The trills require more finger independence. Need to practice them slowly and gradually increase tempo.',
+            step4_answer: 'Focus on trill exercises daily for 10 minutes before playing the full piece. Use metronome starting at 60 BPM.',
+          },
         },
       ],
     },
     {
       practiceAreaName: 'Public Speaking',
+      description: 'No reflection: Has previous session but no reflection',
       sessions: [
         {
-          hoursAgo: 30, // Overdue state (24-48h)
+          hoursAgo: 5,
           intent: 'Practiced presentation for team meeting',
           durationMinutes: 30,
+          hasReflection: false,
         },
       ],
     },
     {
       practiceAreaName: 'Spanish Language',
+      description: 'No sessions: Practice area with no sessions',
+      sessions: [],
+    },
+    {
+      practiceAreaName: 'Rock Climbing',
+      description: 'Long text: Previous session with long step4_answer (>100 chars)',
       sessions: [
         {
-          hoursAgo: 20, // Pending state (< 24h)
-          intent: 'Conversation practice with language partner',
-          durationMinutes: 60,
+          hoursAgo: 1,
+          intent: 'Bouldering session at gym',
+          durationMinutes: 90,
+          hasReflection: true,
+          reflection: {
+            format: 2, // Reflective
+            step2_answer: 'Worked on V4 problems focusing on dynamic moves and overhangs. Completed 3 new problems but struggled with a specific crimp sequence.',
+            step3_answer: 'My grip strength is improving but I need to work on body positioning for overhangs. The crimp sequence requires more core engagement.',
+            step4_answer: 'Next session, I will dedicate 20 minutes to core strengthening exercises before climbing. Focus on hanging leg raises and planks. Then practice the crimp sequence on the training board, starting with easier holds and gradually moving to smaller ones. Also, watch technique videos on overhang body positioning to improve my approach angle.',
+          },
         },
       ],
     },
     {
-      practiceAreaName: 'Rock Climbing',
+      practiceAreaName: 'Meditation',
+      description: 'Deleted session: Has deleted session that should be filtered out',
       sessions: [
         {
-          hoursAgo: 50, // Outside window (> 48h, should not appear)
-          intent: 'Bouldering session at gym',
-          durationMinutes: 90,
+          hoursAgo: 3,
+          intent: 'Morning meditation practice',
+          durationMinutes: 20,
+          hasReflection: true,
+          reflection: {
+            format: 3, // Minimalist
+            step2_answer: 'Focused on breath for 20 minutes',
+            step3_answer: 'Mind wandered less than usual',
+            step4_answer: 'Continue daily practice',
+          },
+          isDeleted: true, // This session will be deleted
+        },
+        {
+          hoursAgo: 10,
+          intent: 'Evening meditation',
+          durationMinutes: 15,
+          hasReflection: true,
+          reflection: {
+            format: 1,
+            step2_answer: 'Evening session was more challenging, mind was very active',
+            step3_answer: 'Evening sessions require more focus, might need to adjust timing',
+            step4_answer: 'Try morning sessions instead, or add a short walk before evening meditation',
+          },
         },
       ],
     },
   ];
 
+  let totalPracticeAreas = 0;
   let totalSessions = 0;
-  let pendingSessions = 0;
-  let overdueSessions = 0;
+  let totalReflections = 0;
+  let deletedSessions = 0;
 
   for (const practiceArea of testData) {
     // Check if practice area already exists
@@ -207,10 +257,13 @@ export async function insertTestPendingReflections(): Promise<void> {
       await db.runAsync(
         `INSERT INTO practice_areas (id, name, created_at, is_deleted)
          VALUES (?, ?, ?, 0)`,
-        [practiceAreaId, practiceArea.practiceAreaName, now - (7 * 24 * 60 * 60 * 1000)] // Created 7 days ago
+        [practiceAreaId, practiceArea.practiceAreaName, now - (7 * 24 * 60 * 60 * 1000)]
       );
-      console.log(`   ✅ Created practice area: ${practiceArea.practiceAreaName}`);
+      console.log(`   ✅ Created practice area: ${practiceArea.practiceAreaName} (${practiceArea.description})`);
+      totalPracticeAreas++;
     }
+
+    let previousSessionId: string | null = null;
 
     // Create sessions for this practice area
     for (const session of practiceArea.sessions) {
@@ -218,29 +271,89 @@ export async function insertTestPendingReflections(): Promise<void> {
       const durationMs = session.durationMinutes * 60 * 1000;
       const endedAt = now - (session.hoursAgo * 60 * 60 * 1000);
       const startedAt = endedAt - durationMs;
+      const isDeleted = 'isDeleted' in session && session.isDeleted ? 1 : 0;
 
       await db.runAsync(
         `INSERT INTO sessions (id, practice_area_id, previous_session_id, intent, target_duration_seconds, started_at, ended_at, is_deleted)
-         VALUES (?, ?, NULL, ?, NULL, ?, ?, 0)`,
-        [sessionId, practiceAreaId, session.intent, startedAt, endedAt]
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
+        [sessionId, practiceAreaId, previousSessionId, session.intent, startedAt, endedAt, isDeleted]
       );
 
       totalSessions++;
-
-      if (session.hoursAgo < 24) {
-        pendingSessions++;
-      } else if (session.hoursAgo >= 24 && session.hoursAgo < 48) {
-        overdueSessions++;
+      if (isDeleted) {
+        deletedSessions++;
       }
+
+      // Create reflection if it exists
+      if (session.hasReflection && !isDeleted && 'reflection' in session && session.reflection) {
+        const reflectionId = generateId();
+        const completedAt = endedAt + 1000; // Reflection completed 1 second after session ended
+
+        await db.runAsync(
+          `INSERT INTO reflections (id, session_id, format, step2_answer, step3_answer, step4_answer, feedback_rating, feedback_note, completed_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL)`,
+          [
+            reflectionId,
+            sessionId,
+            session.reflection.format,
+            session.reflection.step2_answer,
+            session.reflection.step3_answer,
+            session.reflection.step4_answer,
+            completedAt,
+          ]
+        );
+
+        totalReflections++;
+      }
+
+      previousSessionId = sessionId;
     }
   }
 
-  console.log('\n✅ Test pending reflections data inserted successfully');
-  console.log(`   - Practice Areas: ${testData.length}`);
+  console.log('\n✅ Test data inserted successfully for SessionSetupScreen');
+  console.log(`   - Practice Areas: ${totalPracticeAreas} created`);
   console.log(`   - Total Sessions: ${totalSessions}`);
-  console.log(`   - Pending (< 24h): ${pendingSessions}`);
-  console.log(`   - Overdue (24-48h): ${overdueSessions}`);
-  console.log(`   - Outside window (> 48h): ${totalSessions - pendingSessions - overdueSessions}`);
-  console.log(`   - Expected banner count: ${pendingSessions + overdueSessions}\n`);
+  console.log(`   - Reflections: ${totalReflections}`);
+  console.log(`   - Deleted Sessions: ${deletedSessions} (should be filtered out)`);
+  console.log('\n📋 Test Cases:');
+  console.log('   1. Piano Practice: Should show "Focus on trill exercises daily..."');
+  console.log('   2. Public Speaking: Should show "No previous intent recorded"');
+  console.log('   3. Spanish Language: Should show "No previous sessions"');
+  console.log('   4. Rock Climbing: Should show long text with "Show more" toggle');
+  console.log('   5. Meditation: Should show "Try morning sessions instead..." (deleted session filtered)\n');
+}
+
+/**
+ * Get the most recent session's reflection intent (step4_answer) for a practice area
+ * @param practiceAreaId - The ID of the practice area
+ * @returns Session data with previous_next_action field (from step4_answer), or null if no session exists
+ */
+export async function getPreviousSessionIntent(practiceAreaId: string) {
+  const db = getDatabase();
+  const result = await db.getFirstAsync(
+    `SELECT s.*, r.step4_answer as previous_next_action
+     FROM sessions s
+     LEFT JOIN reflections r ON r.session_id = s.id
+     WHERE s.practice_area_id = ?
+       AND s.is_deleted = 0
+     ORDER BY s.started_at DESC
+     LIMIT 1`,
+    [practiceAreaId]
+  );
+  return result;
+}
+
+/**
+ * Get a Practice Area by ID
+ * @param practiceAreaId - The ID of the practice area
+ * @returns Practice Area object with id and name, or null if not found
+ */
+export async function getPracticeAreaById(practiceAreaId: string): Promise<{ id: string; name: string } | null> {
+  const db = getDatabase();
+  const result = await db.getFirstAsync<{ id: string; name: string }>(
+    `SELECT id, name FROM practice_areas WHERE id = ? AND is_deleted = 0`,
+    [practiceAreaId]
+  );
+  return result;
 }
 
