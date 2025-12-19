@@ -25,6 +25,9 @@ export interface PracticeArea {
 export interface PracticeAreaWithStats extends PracticeArea {
   sessionCount: number;  // Total number of sessions
   lastSessionDate: number | null;  // Timestamp of most recent session (null if none)
+  pendingReflectionsCount: number;  // Sessions with no reflection, ended 0-24h ago
+  overdueReflectionsCount: number;   // Sessions with no reflection, ended 24-48h ago
+  oldestPendingReflectionDate: number | null;  // Timestamp of oldest pending reflection (for sorting)
 }
 
 /**
@@ -39,6 +42,14 @@ export interface Session {
   started_at: number;  // Unix timestamp in milliseconds
   ended_at: number | null;  // NULL if session still active
   is_deleted: number;  // 0 = active, 1 = deleted (soft delete)
+}
+
+/**
+ * Pending Reflection - Session awaiting reflection with practice area name
+ * Used for displaying pending/overdue reflection banners
+ */
+export interface PendingReflection extends Session {
+  practiceAreaName: string;
 }
 
 /**

@@ -18,7 +18,7 @@ export type RootStackParamList = {
   ReflectionFormat: undefined;
   ReflectionPrompts: undefined;
   ReflectionFeedback: undefined;
-  SeriesTimeline: undefined;
+  SeriesTimeline: { practiceAreaId: string; focusSessionId?: string };
   Settings: undefined;
 };
 

@@ -12,12 +12,13 @@ import {
   Alert,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
-import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
+import { COLORS, SPACING, TYPOGRAPHY, APP_CONSTANTS } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
-import { PracticeAreaWithStats } from '../utils/types';
-import { formatDate } from '../utils/timeFormatting';
-import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists } from "../db/queries";
+import { PracticeAreaWithStats, PendingReflection } from '../utils/types';
+import { formatDate, formatHoursRemaining } from '../utils/timeFormatting';
+import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestPendingReflections } from "../db/queries";
 import { getDatabase } from "../db/migrations";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
@@ -31,6 +32,53 @@ const formatSessionCount = (count: number): string => {
   return count === 1 ? "1 session" : `${count} sessions`;
 };
 
+// Pending Reflections Banner Component
+type PendingReflectionsBannerProps = {
+  pendingReflections: PendingReflection[];
+  onPress: () => void;
+};
+
+const PendingReflectionsBanner: React.FC<PendingReflectionsBannerProps> = ({
+  pendingReflections,
+  onPress
+}) => {
+  if (pendingReflections.length === 0) {
+    return null;
+  }
+
+  const oldest = pendingReflections[0];
+  const count = pendingReflections.length;
+  const now = Date.now();
+  const hoursSinceEnd = (now - oldest.ended_at!) / (1000 * 60 * 60);
+  const hoursRemaining = 48 - hoursSinceEnd;
+  const millisecondsRemaining = hoursRemaining * 60 * 60 * 1000;
+
+  // Determine state: Pending (< 24h) or Overdue (24-48h)
+  const isPending = hoursSinceEnd < 24;
+  const isOverdue = hoursSinceEnd >= 24 && hoursSinceEnd < 48;
+
+  // Format text
+  const countText = count === 1 ? "1 reflection" : `${count} reflections`;
+  const stateText = isPending ? "due" : "overdue";
+  const timeText = formatHoursRemaining(millisecondsRemaining);
+  const suffixText = isPending ? "" : " before expiry";
+
+  const bannerText = `${countText} ${stateText} (${timeText}${suffixText})`;
+
+  // Determine background color
+  const backgroundColor = isPending ? COLORS.warning : COLORS.error;
+
+  return (
+    <TouchableOpacity
+      style={[styles.pendingBanner, { backgroundColor }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.pendingBannerText}>{bannerText}</Text>
+    </TouchableOpacity>
+  );
+};
+
 // Practice Area Item Component
 type PracticeAreaItemProps = {
   item: PracticeAreaWithStats;
@@ -42,14 +90,45 @@ const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress }) =>
     ? formatDate(item.lastSessionDate)
     : "No sessions yet";
 
+  const hasPending = item.pendingReflectionsCount > 0;
+  const hasOverdue = item.overdueReflectionsCount > 0;
+  const hasIndicators = hasPending || hasOverdue;
+
+  // Determine border style - overdue takes priority
+  const borderStyle = hasOverdue
+    ? styles.cardBorderOverdue
+    : hasPending
+      ? styles.cardBorderPending
+      : null;
+
   return (
     <TouchableOpacity
-      style={styles.practiceAreaItem}
+      style={[styles.practiceAreaItem, borderStyle]}
       onPress={() => onPress(item.id)}
       activeOpacity={0.7}
     >
       <View style={styles.itemContent}>
-        <Text style={styles.practiceAreaName}>{item.name}</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.practiceAreaName}>{item.name}</Text>
+          {hasIndicators && (
+            <View style={styles.indicatorContainer}>
+              {hasPending && (
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingBadgeText}>
+                    {item.pendingReflectionsCount} pending
+                  </Text>
+                </View>
+              )}
+              {hasOverdue && (
+                <View style={styles.overdueBadge}>
+                  <Text style={styles.overdueBadgeText}>
+                    {item.overdueReflectionsCount} overdue
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
         <Text style={styles.lastSessionDate}>{lastSessionText}</Text>
         <View style={styles.sessionCountBadge}>
           <Text style={styles.sessionCountText}>
@@ -75,6 +154,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // Get state from store
   const practiceAreas = useAppStore((state) => state.practiceAreas) as PracticeAreaWithStats[];
   const setPracticeAreas = useAppStore(state => state.setPracticeAreas);
+  const setPendingReflectionsCount = useAppStore(state => state.setPendingReflectionsCount);
 
   // Pull-to-refresh state (user will manage this)
   const [refreshing, setRefreshing] = useState(false);
@@ -88,35 +168,75 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [nameError, setNameError] = useState("");
 
+  // Pending reflections state
+  const [pendingReflections, setPendingReflections] = useState<PendingReflection[]>([]);
+
   const loadPracticeAreas = async () => {
     setIsLoading(true);
     try {
       const practiceAreas: PracticeAreaWithStats[] = await getPracticeAreas();
+      console.log('practiceAreas', practiceAreas)
       setPracticeAreas(practiceAreas);
     } catch (error) {
       console.error('Error loading practice areas:', error);
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
-  // // In HomeScreen or a dev screen
-  // const handleReset = async () => {
-  //   const db = getDatabase();
-  //   await db.runAsync('DELETE FROM practice_areas');
-  //   await loadPracticeAreas(); // Refresh the list
-  //   Alert.alert('Reset', 'Practice Areas table cleared');
-  // };
+  const loadPendingReflections = async () => {
+    try {
+      const pending = await getPendingReflections();
+      console.log('pending', pending)
+      setPendingReflections(pending as PendingReflection[]);
+      setPendingReflectionsCount(pending.length);
+    } catch (error) {
+      console.error('Error loading pending reflections:', error);
+    }
+  };
+
+  // In HomeScreen or a dev screen
+  const handleReset = async () => {
+    const db = getDatabase();
+    await db.runAsync('DELETE FROM practice_areas');
+    await db.runAsync('DELETE FROM sessions');
+    await db.runAsync('DELETE FROM reflections');
+    await loadPracticeAreas(); // Refresh the list
+    Alert.alert('Reset', 'Practice Areas table cleared');
+  };
+
+  // Uncomment and modify
+  const handleInsertTestData = async () => {
+    try {
+      await insertTestPendingReflections();
+      await loadPracticeAreas();
+      await loadPendingReflections();
+      Alert.alert('Test Data', 'Test pending reflections data inserted');
+    } catch (error) {
+      console.error('Error inserting test data:', error);
+      Alert.alert('Error', 'Failed to insert test data');
+    }
+  };
 
   useEffect(() => {
     // handleReset();
+    // handleInsertTestData();
+    loadPendingReflections();
     loadPracticeAreas();
   }, []);
+
+  // Reload pending reflections when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPendingReflections();
+    }, [])
+  );
 
   // Refresh handler placeholder - user will implement
   const handleRefresh = async () => {
     setRefreshing(true);
     // User will implement data loading here
+    await loadPendingReflections();
     await loadPracticeAreas();
     setRefreshing(false);
   };
@@ -124,6 +244,17 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // Navigation handler
   const handlePracticeAreaPress = (practiceAreaId: string) => {
     navigation.navigate("SessionSetup", { practiceAreaId });
+  };
+
+  // Handle pending reflection banner press
+  const handlePendingBannerPress = () => {
+    if (pendingReflections.length > 0) {
+      const oldest = pendingReflections[0];
+      navigation.navigate("SeriesTimeline", {
+        practiceAreaId: oldest.practice_area_id,
+        focusSessionId: oldest.id,
+      });
+    }
   };
 
   // Modal handlers
@@ -187,6 +318,12 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* Pending Reflections Banner */}
+      <PendingReflectionsBanner
+        pendingReflections={pendingReflections}
+        onPress={handlePendingBannerPress}
+      />
+
       <FlatList
         data={practiceAreas}
         renderItem={({ item }) => (
@@ -291,6 +428,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.background,
   },
+  // Pending Reflections Banner
+  pendingBanner: {
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingBannerText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
+    textAlign: 'center',
+  },
   listContainer: {
     padding: SPACING.md,
   },
@@ -311,14 +461,56 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  cardBorderPending: {
+    borderLeftWidth: 5,
+    borderLeftColor: COLORS.warning,
+  },
+  cardBorderOverdue: {
+    borderLeftWidth: 5,
+    borderLeftColor: COLORS.error,
+  },
   itemContent: {
     gap: SPACING.xs,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.xs,
   },
   practiceAreaName: {
     fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.primary,
-    marginBottom: SPACING.xs,
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  indicatorContainer: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    flexShrink: 0,
+  },
+  pendingBadge: {
+    backgroundColor: COLORS.warning,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs / 2,
+    borderRadius: 8,
+  },
+  pendingBadgeText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
+  },
+  overdueBadge: {
+    backgroundColor: COLORS.error,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs / 2,
+    borderRadius: 8,
+  },
+  overdueBadgeText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
   },
   lastSessionDate: {
     fontSize: TYPOGRAPHY.fontSize.sm,
