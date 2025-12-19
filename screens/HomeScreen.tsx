@@ -21,6 +21,8 @@ import PendingReflectionsBanner from "../components/PendingReflectionsBanner";
 import PracticeAreaItem from "../components/PracticeAreaItem";
 import EmptyState from "../components/EmptyState";
 import CreatePracticeAreaModal from "../components/CreatePracticeAreaModal";
+import SecurityWarningBanner from "../components/SecurityWarningBanner";
+import { checkDeviceSecurity } from "../services/securityService";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -34,6 +36,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const practiceAreas = useAppStore((state) => state.practiceAreas) as PracticeAreaWithStats[];
   const setPracticeAreas = useAppStore(state => state.setPracticeAreas);
   const setPendingReflectionsCount = useAppStore(state => state.setPendingReflectionsCount);
+  const showSecurityWarning = useAppStore(state => state.showSecurityWarning);
+  const setShowSecurityWarning = useAppStore(state => state.setShowSecurityWarning);
 
   // Pull-to-refresh state (user will manage this)
   const [refreshing, setRefreshing] = useState(false);
@@ -70,6 +74,19 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const checkAndShowSecurityWarning = async () => {
+    try {
+      const isSecure = await checkDeviceSecurity();
+      console.log('isSecure', isSecure)
+      if (!isSecure) {
+        setShowSecurityWarning(true);
+      }
+    } catch (error) {
+      console.error('Error checking device security:', error);
+      // Don't show warning if check fails
+    }
+  };
+
   // In HomeScreen or a dev screen
   const handleReset = async () => {
     const db = getDatabase();
@@ -96,6 +113,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   useEffect(() => {
     // handleReset();
     // handleInsertTestData();
+    checkAndShowSecurityWarning();
     loadPendingReflections();
     loadPracticeAreas();
   }, []);
@@ -130,6 +148,11 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         focusSessionId: oldest.id,
       });
     }
+  };
+
+  // Security warning handler
+  const handleDismissSecurityWarning = () => {
+    setShowSecurityWarning(false);
   };
 
   // Modal handlers
@@ -175,6 +198,11 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* Security Warning Banner */}
+      {showSecurityWarning && (
+        <SecurityWarningBanner onDismiss={handleDismissSecurityWarning} />
+      )}
+
       {/* Pending Reflections Banner */}
       <PendingReflectionsBanner
         pendingReflections={pendingReflections}

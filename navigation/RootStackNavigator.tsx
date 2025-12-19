@@ -1,6 +1,8 @@
 import React from "react";
+import { TouchableOpacity, Text, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
+import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 
 import HomeScreen from "../screens/HomeScreen";
 import SessionSetupScreen from "../screens/SessionSetupScreen";
@@ -36,7 +38,18 @@ const RootStackNavigator = () => {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: "Home" }}
+          options={({ navigation }) => ({
+            title: "Home",
+            headerRight: () => (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Settings')}
+                style={styles.settingsButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.settingsIcon}>⚙️</Text>
+              </TouchableOpacity>
+            ),
+          })}
         />
         <Stack.Screen
           name="SessionSetup"
@@ -77,5 +90,15 @@ const RootStackNavigator = () => {
     </NavigationContainer>
   );
 };
+
+const styles = StyleSheet.create({
+  settingsButton: {
+    marginRight: SPACING.md,
+    padding: SPACING.xs,
+  },
+  settingsIcon: {
+    fontSize: 24,
+  },
+});
 
 export default RootStackNavigator;
