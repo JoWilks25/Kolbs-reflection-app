@@ -13,7 +13,7 @@ import SettingsScreen from "../screens/SettingsScreen";
 
 export type RootStackParamList = {
   Home: undefined;
-  SessionSetup: undefined;
+  SessionSetup: { practiceAreaId: string };
   SessionActive: undefined;
   ReflectionFormat: undefined;
   ReflectionPrompts: undefined;

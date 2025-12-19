@@ -8,7 +8,7 @@
 import { create } from 'zustand';
 import type {
   AppStore,
-  PracticeArea,
+  PracticeAreaWithStats,
   Session,
   ReflectionFormat,
   ReflectionDraft,
@@ -70,12 +70,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   /**
    * Set the list of practice areas (typically from DB query)
    */
-  setPracticeAreas: (areas: PracticeArea[]) => set({ practiceAreas: areas }),
+  setPracticeAreas: (areas: PracticeAreaWithStats[]) => set({ practiceAreas: areas }),
 
   /**
    * Set the currently selected practice area
    */
-  setCurrentPracticeArea: (practiceArea: PracticeArea | null) =>
+  setCurrentPracticeArea: (practiceArea: PracticeAreaWithStats | null) =>
     set({ currentPracticeArea: practiceArea }),
 
   // ============================================================================
