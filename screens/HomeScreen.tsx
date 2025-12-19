@@ -21,8 +21,6 @@ import PendingReflectionsBanner from "../components/PendingReflectionsBanner";
 import PracticeAreaItem from "../components/PracticeAreaItem";
 import EmptyState from "../components/EmptyState";
 import CreatePracticeAreaModal from "../components/CreatePracticeAreaModal";
-import SecurityWarningBanner from "../components/SecurityWarningBanner";
-import { checkDeviceSecurity } from "../services/securityService";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 

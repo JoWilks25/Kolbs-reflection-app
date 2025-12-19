@@ -244,3 +244,37 @@ export async function insertTestPendingReflections(): Promise<void> {
   console.log(`   - Expected banner count: ${pendingSessions + overdueSessions}\n`);
 }
 
+/**
+ * Get the most recent session's reflection intent (step4_answer) for a practice area
+ * @param practiceAreaId - The ID of the practice area
+ * @returns Session data with previous_next_action field (from step4_answer), or null if no session exists
+ */
+export async function getPreviousSessionIntent(practiceAreaId: string) {
+  const db = getDatabase();
+  const result = await db.getFirstAsync(
+    `SELECT s.*, r.step4_answer as previous_next_action
+     FROM sessions s
+     LEFT JOIN reflections r ON r.session_id = s.id
+     WHERE s.practice_area_id = ?
+       AND s.is_deleted = 0
+     ORDER BY s.started_at DESC
+     LIMIT 1`,
+    [practiceAreaId]
+  );
+  return result;
+}
+
+/**
+ * Get a Practice Area by ID
+ * @param practiceAreaId - The ID of the practice area
+ * @returns Practice Area object with id and name, or null if not found
+ */
+export async function getPracticeAreaById(practiceAreaId: string): Promise<{ id: string; name: string } | null> {
+  const db = getDatabase();
+  const result = await db.getFirstAsync<{ id: string; name: string }>(
+    `SELECT id, name FROM practice_areas WHERE id = ? AND is_deleted = 0`,
+    [practiceAreaId]
+  );
+  return result;
+}
+
