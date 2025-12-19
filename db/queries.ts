@@ -5,7 +5,7 @@
  * Currently empty - ready for future implementation.
  */
 
-import { PracticeAreaWithStats, PracticeArea } from '../utils';
+import { PracticeAreaWithStats, PracticeArea, Session } from '../utils';
 import { getDatabase } from './migrations';
 import { generateId } from '../utils/uuid';
 
@@ -355,5 +355,51 @@ export async function getPracticeAreaById(practiceAreaId: string): Promise<{ id:
     [practiceAreaId]
   );
   return result;
+}
+
+/**
+ * Get the last session for a practice area (to link as previous_session_id)
+ * @param practiceAreaId - The ID of the practice area
+ * @returns The most recent session, or null if no sessions exist
+ */
+export async function getLastSessionForPracticeArea(practiceAreaId: string): Promise<Session | null> {
+  const db = getDatabase();
+  const result = await db.getFirstAsync<Session>(
+    `SELECT * FROM sessions 
+     WHERE practice_area_id = ? 
+       AND is_deleted = 0 
+     ORDER BY started_at DESC 
+     LIMIT 1`,
+    [practiceAreaId]
+  );
+  return result || null;
+}
+
+/**
+ * Create a new session
+ * @param session - The session object to insert (without is_deleted, which defaults to 0)
+ * @returns The created session with is_deleted set to 0
+ */
+export async function createSession(session: Omit<Session, 'is_deleted'>): Promise<Session> {
+  const db = getDatabase();
+  
+  await db.runAsync(
+    `INSERT INTO sessions (id, practice_area_id, previous_session_id, intent, target_duration_seconds, started_at, ended_at, is_deleted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+    [
+      session.id,
+      session.practice_area_id,
+      session.previous_session_id,
+      session.intent,
+      session.target_duration_seconds,
+      session.started_at,
+      session.ended_at,
+    ]
+  );
+
+  return {
+    ...session,
+    is_deleted: 0,
+  };
 }
 
