@@ -75,3 +75,16 @@ export const formatDate = (timestamp: number): string => {
   return date.toLocaleString('en-US', options);
 };
 
+/**
+ * Format milliseconds remaining into hours remaining text
+ * @param millisecondsRemaining - Time remaining in milliseconds
+ * @returns Formatted hours remaining string
+ * @example
+ * formatHoursRemaining(72000000) → "20h remaining"
+ * formatHoursRemaining(7200000) → "2h remaining"
+ */
+export const formatHoursRemaining = (millisecondsRemaining: number): string => {
+  const hoursRemaining = Math.ceil(millisecondsRemaining / (1000 * 60 * 60));
+  return `${hoursRemaining}h remaining`;
+};
+
