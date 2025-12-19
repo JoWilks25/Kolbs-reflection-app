@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
@@ -14,7 +17,8 @@ import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
 import { PracticeAreaWithStats } from '../utils/types';
 import { formatDate } from '../utils/timeFormatting';
-import { getPracticeAreas } from "../db/queries";
+import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists } from "../db/queries";
+import { getDatabase } from "../db/migrations";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -78,6 +82,12 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // Loading state placeholder (user will manage this)
   const [isLoading, setIsLoading] = useState(false);
 
+  // Create modal state
+  const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [newPracticeAreaName, setNewPracticeAreaName] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [nameError, setNameError] = useState("");
+
   const loadPracticeAreas = async () => {
     setIsLoading(true);
     try {
@@ -90,7 +100,16 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     }
   }
 
+  // // In HomeScreen or a dev screen
+  // const handleReset = async () => {
+  //   const db = getDatabase();
+  //   await db.runAsync('DELETE FROM practice_areas');
+  //   await loadPracticeAreas(); // Refresh the list
+  //   Alert.alert('Reset', 'Practice Areas table cleared');
+  // };
+
   useEffect(() => {
+    // handleReset();
     loadPracticeAreas();
   }, []);
 
@@ -105,6 +124,56 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // Navigation handler
   const handlePracticeAreaPress = (practiceAreaId: string) => {
     navigation.navigate("SessionSetup", { practiceAreaId });
+  };
+
+  // Modal handlers
+  const openCreateModal = () => {
+    setIsCreateModalVisible(true);
+  };
+
+  const closeCreateModal = () => {
+    setIsCreateModalVisible(false);
+    setNewPracticeAreaName("");
+    setNameError("");
+  };
+
+  const validateName = (name: string): boolean => {
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      setNameError("Please enter a name");
+      return false;
+    }
+    setNameError("");
+    return true;
+  };
+
+  const handleCreate = async () => {
+    const trimmedName = newPracticeAreaName.trim();
+
+    if (!validateName(trimmedName)) {
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      // Check for duplicate name
+      const nameExists = await checkPracticeAreaNameExists(trimmedName);
+      if (nameExists) {
+        setNameError("A Practice Area with this name already exists");
+        setIsCreating(false);
+        return;
+      }
+
+      await createPracticeArea(trimmedName);
+      closeCreateModal();
+      await loadPracticeAreas();
+      Alert.alert("Success", "Practice Area created");
+    } catch (error) {
+      console.error("Error creating practice area:", error);
+      Alert.alert("Error", "Failed to create Practice Area. Please try again.");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   // Loading State
@@ -137,6 +206,76 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           />
         }
       />
+
+      {/* New Practice Area Button */}
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={styles.newPracticeAreaButton}
+          onPress={openCreateModal}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.newPracticeAreaButtonText}>New Practice Area</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Create Practice Area Modal */}
+      <Modal
+        visible={isCreateModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeCreateModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>New Practice Area</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Practice Area name"
+              placeholderTextColor={COLORS.text.disabled}
+              value={newPracticeAreaName}
+              onChangeText={setNewPracticeAreaName}
+              maxLength={100}
+              autoFocus={true}
+              editable={!isCreating}
+            />
+
+            <View style={styles.characterCountContainer}>
+              <Text style={styles.characterCount}>
+                {newPracticeAreaName.length}/100
+              </Text>
+            </View>
+
+            {nameError ? (
+              <Text style={styles.errorText}>{nameError}</Text>
+            ) : null}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={closeCreateModal}
+                disabled={isCreating}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.createButton,
+                  isCreating && styles.createButtonDisabled
+                ]}
+                onPress={handleCreate}
+                disabled={isCreating}
+              >
+                <Text style={styles.createButtonText}>
+                  {isCreating ? "Creating..." : "Create"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -217,6 +356,115 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.fontSize.md * TYPOGRAPHY.lineHeight.normal,
+  },
+  // New Practice Area Button
+  buttonContainer: {
+    padding: SPACING.md,
+    backgroundColor: COLORS.background,
+  },
+  newPracticeAreaButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  newPracticeAreaButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.md,
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: SPACING.lg,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: TYPOGRAPHY.fontSize.xl,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.lg,
+    textAlign: 'center',
+  },
+  input: {
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    padding: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.primary,
+    borderWidth: 1,
+    borderColor: COLORS.neutral[300],
+  },
+  characterCountContainer: {
+    alignItems: 'flex-end',
+    marginTop: SPACING.xs,
+  },
+  characterCount: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.secondary,
+  },
+  errorText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.error,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.lg,
+    gap: SPACING.md,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: SPACING.md,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: COLORS.neutral[200],
+  },
+  cancelButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: COLORS.text.primary,
+  },
+  createButton: {
+    backgroundColor: COLORS.primary,
+  },
+  createButtonDisabled: {
+    backgroundColor: COLORS.neutral[300],
+  },
+  createButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
   },
 });
 
