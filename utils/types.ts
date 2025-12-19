@@ -19,6 +19,15 @@ export interface PracticeArea {
 }
 
 /**
+ * Practice Area with session statistics for UI display
+ * Extends PracticeArea with aggregated session data
+ */
+export interface PracticeAreaWithStats extends PracticeArea {
+  sessionCount: number;  // Total number of sessions
+  lastSessionDate: number | null;  // Timestamp of most recent session (null if none)
+}
+
+/**
  * Session - A single practice session within a Practice Area
  */
 export interface Session {

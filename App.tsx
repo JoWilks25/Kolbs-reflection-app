@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import RootStackNavigator from "./navigation/RootStackNavigator";
 import { initDatabase, getDatabase } from "./db/migrations";
 import { THEME } from "./utils/constants";
+import { getPracticeAreas } from "./db/queries";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -13,22 +14,6 @@ export default function App() {
       try {
         // Initialize database
         await initDatabase();
-
-        // Temporary test query to verify tables exist
-        const testDB = async () => {
-          try {
-            const db = getDatabase();
-            const result = await db.getAllAsync<{ name: string }>(
-              "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            );
-            console.log('Database tables:', result.map(r => r.name));
-            // Should show: practice_areas, sessions, reflections
-          } catch (err) {
-            console.error('Test query failed:', err);
-          }
-        };
-
-        await testDB();
         setIsLoading(false);
       } catch (err) {
         console.error('Failed to initialize app:', err);

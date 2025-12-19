@@ -1,9 +1,19 @@
-import React, { useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Button } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+} from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
+import { PracticeAreaWithStats } from '../utils/types';
+import { formatDate } from '../utils/timeFormatting';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -11,144 +21,102 @@ type Props = {
   navigation: HomeScreenNavigationProp;
 };
 
+// Format session count with proper pluralization
+const formatSessionCount = (count: number): string => {
+  return count === 1 ? "1 session" : `${count} sessions`;
+};
+
+// Practice Area Item Component
+type PracticeAreaItemProps = {
+  item: PracticeAreaWithStats;
+  onPress: (practiceAreaId: string) => void;
+};
+
+const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress }) => {
+  const lastSessionText = item.lastSessionDate
+    ? formatDate(item.lastSessionDate)
+    : "No sessions yet";
+
+  return (
+    <TouchableOpacity
+      style={styles.practiceAreaItem}
+      onPress={() => onPress(item.id)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.itemContent}>
+        <Text style={styles.practiceAreaName}>{item.name}</Text>
+        <Text style={styles.lastSessionDate}>{lastSessionText}</Text>
+        <View style={styles.sessionCountBadge}>
+          <Text style={styles.sessionCountText}>
+            {formatSessionCount(item.sessionCount)}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// Empty State Component
+const EmptyState: React.FC = () => (
+  <View style={styles.emptyStateContainer}>
+    <Text style={styles.emptyStateTitle}>No Practice Areas yet</Text>
+    <Text style={styles.emptyStateBody}>
+      Create a Practice Area to start tracking your practice sessions.
+    </Text>
+  </View>
+);
+
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
-  // Get state and actions from store
-  const practiceAreas = useAppStore((state) => state.practiceAreas);
-  const setPracticeAreas = useAppStore((state) => state.setPracticeAreas);
-  const sessionTimer = useAppStore((state) => state.sessionTimer);
-  const currentSession = useAppStore((state) => state.currentSession);
-  const targetDuration = useAppStore((state) => state.targetDuration);
-  const targetReached = useAppStore((state) => state.targetReached);
-  const startSession = useAppStore((state) => state.startSession);
-  const updateTimer = useAppStore((state) => state.updateTimer);
-  const endSession = useAppStore((state) => state.endSession);
+  // Get state from store
+  const practiceAreas = useAppStore((state) => state.practiceAreas) as PracticeAreaWithStats[];
 
-  // Timer interval ref
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Pull-to-refresh state (user will manage this)
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Test: Set practice areas on mount
-  useEffect(() => {
-    setPracticeAreas([
-      { id: '1', name: 'Test Practice Area', created_at: Date.now(), is_deleted: 0 },
-    ]);
-  }, [setPracticeAreas]);
+  // Loading state placeholder (user will manage this)
+  const [isLoading] = useState(false);
 
-  // Test: Timer functionality (no target)
-  const handleStartTimer = () => {
-    // Create a test session without target duration
-    startSession(
-      {
-        id: 'test-session-1',
-        practice_area_id: '1',
-        previous_session_id: null,
-        intent: 'Test session intent',
-        target_duration_seconds: null,
-        started_at: Date.now(),
-        ended_at: null,
-        is_deleted: 0,
-      },
-      null
+  // Refresh handler placeholder - user will implement
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // User will implement data loading here
+    setRefreshing(false);
+  };
+
+  // Navigation handler
+  const handlePracticeAreaPress = (practiceAreaId: string) => {
+    navigation.navigate("SessionSetup", { practiceAreaId });
+  };
+
+  // Loading State
+  if (isLoading && practiceAreas.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
     );
-
-    // Start timer interval
-    timerRef.current = setInterval(() => {
-      updateTimer();
-    }, 1000);
-  };
-
-  // Test: Timer with target duration (10 seconds for quick testing)
-  const handleStartTimerWithTarget = () => {
-    // Create a test session with 10 second target
-    startSession(
-      {
-        id: 'test-session-2',
-        practice_area_id: '1',
-        previous_session_id: null,
-        intent: 'Test session with target',
-        target_duration_seconds: 10,
-        started_at: Date.now(),
-        ended_at: null,
-        is_deleted: 0,
-      },
-      10
-    );
-
-    // Start timer interval
-    timerRef.current = setInterval(() => {
-      updateTimer();
-    }, 1000);
-  };
-
-  const handleStopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    endSession();
-  };
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
-
-  // Format timer display (MM:SS)
-  const formatTimer = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Home Screen</Text>
-
-      {/* Display practice areas from store */}
-      <Text style={styles.subtitle}>Practice Areas from Store:</Text>
-      {practiceAreas.map((pa) => (
-        <Text key={pa.id} style={styles.practiceAreaItem}>
-          {pa.name} (id: {pa.id})
-        </Text>
-      ))}
-
-      {/* Timer test section */}
-      <View style={styles.timerSection}>
-        <Text style={styles.subtitle}>Timer Test:</Text>
-        <Text style={styles.timerDisplay}>{formatTimer(sessionTimer)}</Text>
-        {targetDuration !== null && (
-          <Text style={styles.targetInfo}>
-            Target: {formatTimer(targetDuration)} / Reached: {targetReached ? 'Yes' : 'No'}
-          </Text>
+      <FlatList
+        data={practiceAreas}
+        renderItem={({ item }) => (
+          <PracticeAreaItem item={item} onPress={handlePracticeAreaPress} />
         )}
-        <Text style={styles.sessionStatus}>
-          Session: {currentSession ? 'Active' : 'None'}
-        </Text>
-        <View style={styles.buttonRow}>
-          <Button
-            title="Start (No Target)"
-            onPress={handleStartTimer}
-            disabled={currentSession !== null}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={
+          practiceAreas.length === 0 ? styles.emptyListContainer : styles.listContainer
+        }
+        ListEmptyComponent={<EmptyState />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
           />
-          <Button
-            title="Start (10s Target)"
-            onPress={handleStartTimerWithTarget}
-            disabled={currentSession !== null}
-          />
-          <Button
-            title="Stop Timer"
-            onPress={handleStopTimer}
-            disabled={currentSession === null}
-          />
-        </View>
-      </View>
-
-      <Button
-        title="Go to Session Setup"
-        onPress={() => navigation.navigate("SessionSetup")}
+        }
       />
     </View>
   );
@@ -157,60 +125,79 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+  },
+  listContainer: {
     padding: SPACING.md,
   },
-  title: {
-    fontSize: TYPOGRAPHY.fontSize.xxl,
+  emptyListContainer: {
+    flex: 1,
+  },
+  practiceAreaItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  itemContent: {
+    gap: SPACING.xs,
+  },
+  practiceAreaName: {
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.xs,
+  },
+  lastSessionDate: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    marginBottom: SPACING.xs,
+  },
+  sessionCountBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: 12,
+    marginTop: SPACING.xs,
+  },
+  sessionCountText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: COLORS.text.inverse,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  emptyStateTitle: {
+    fontSize: TYPOGRAPHY.fontSize.xl,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.primary,
     marginBottom: SPACING.md,
+    textAlign: 'center',
   },
-  subtitle: {
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-    color: COLORS.text.secondary,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  practiceAreaItem: {
+  emptyStateBody: {
     fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-    paddingVertical: SPACING.xs,
-  },
-  timerSection: {
-    alignItems: 'center',
-    marginVertical: SPACING.lg,
-    padding: SPACING.md,
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    width: '100%',
-  },
-  timerDisplay: {
-    fontSize: TYPOGRAPHY.fontSize.xxxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.primary,
-    marginVertical: SPACING.sm,
-  },
-  sessionStatus: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.text.secondary,
-    marginBottom: SPACING.sm,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginTop: SPACING.sm,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  targetInfo: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.warning,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-    marginVertical: SPACING.xs,
+    textAlign: 'center',
+    lineHeight: TYPOGRAPHY.fontSize.md * TYPOGRAPHY.lineHeight.normal,
   },
 });
 
