@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Vibration,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -15,12 +16,13 @@ import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { useAppStore } from "../stores/appStore";
 import { getPracticeAreaById, updateSessionEndTime } from "../db/queries";
 import { formatTime } from "../utils/timeFormatting";
+import { scheduleTargetReachedNotification } from "../services/notificationService";
 
 type SessionActiveScreenNavigationProp = StackNavigationProp<RootStackParamList, "SessionActive">;
 
 const SessionActiveScreen: React.FC = () => {
   const navigation = useNavigation<SessionActiveScreenNavigationProp>();
-  const { currentSession, sessionTimer, targetDuration, updateTimer, endSession } = useAppStore();
+  const { currentSession, sessionTimer, targetDuration, targetReached, updateTimer, endSession } = useAppStore();
 
   const [practiceAreaName, setPracticeAreaName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +62,14 @@ const SessionActiveScreen: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [updateTimer]);
+
+  // Target reached notification
+  useEffect(() => {
+    if (targetDuration && sessionTimer === targetDuration && targetReached) {
+      scheduleTargetReachedNotification();
+      Vibration.vibrate([0, 200, 100, 200]);
+    }
+  }, [sessionTimer, targetDuration, targetReached]);
 
   // Handle end session
   const handleEndSession = async () => {
