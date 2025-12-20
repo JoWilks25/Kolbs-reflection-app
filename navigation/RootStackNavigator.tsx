@@ -59,7 +59,11 @@ const RootStackNavigator = () => {
         <Stack.Screen
           name="SessionActive"
           component={SessionActiveScreen}
-          options={{ title: "Session Active" }}
+          options={{ 
+            title: "Session Active",
+            headerLeft: () => null,
+            gestureEnabled: false,
+          }}
         />
         <Stack.Screen
           name="ReflectionFormat"

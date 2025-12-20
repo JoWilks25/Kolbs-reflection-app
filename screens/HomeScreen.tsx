@@ -77,7 +77,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const checkAndShowSecurityWarning = async () => {
     try {
       const isSecure = await checkDeviceSecurity();
-      console.log('isSecure', isSecure)
       if (!isSecure) {
         setShowSecurityWarning(true);
       }
