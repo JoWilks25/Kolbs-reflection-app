@@ -115,7 +115,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       return {
         sessionTimer: newTimer,
-        targetReached: state.targetReached || targetJustReached,
+        targetReached: state.targetReached || Boolean(targetJustReached),
       };
     }),
 

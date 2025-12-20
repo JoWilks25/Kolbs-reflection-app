@@ -23,7 +23,6 @@ import * as LocalAuthentication from 'expo-local-authentication';
 export const checkDeviceSecurity = async (): Promise<boolean> => {
   try {
     const result = await LocalAuthentication.getEnrolledLevelAsync();
-    console.log('result', result)
     // Treat any enrolled authentication(passcode / biometric) as secure enough
     // SecurityLevel.NONE = 0 means no security is enabled
     return result !== LocalAuthentication.SecurityLevel.NONE;

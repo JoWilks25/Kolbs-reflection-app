@@ -488,3 +488,16 @@ export async function createSession(session: Omit<Session, 'is_deleted'>): Promi
   };
 }
 
+/**
+ * Update session end time
+ * @param sessionId - The ID of the session to end
+ * @param endedAt - The timestamp when session ended
+ */
+export async function updateSessionEndTime(sessionId: string, endedAt: number): Promise<void> {
+  const db = getDatabase();
+  await db.runAsync(
+    `UPDATE sessions SET ended_at = ? WHERE id = ?`,
+    [endedAt, sessionId]
+  );
+}
+
