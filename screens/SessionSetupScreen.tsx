@@ -17,7 +17,6 @@ import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS, TEST_DURATION_PRE
 import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, checkLastSessionHasPendingReflection, deleteSession, createSession } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
 import { generateId } from "../utils/uuid";
-import { scheduleTargetReachedNotification } from "../services/notificationService";
 
 type SessionSetupScreenRouteProp = RouteProp<RootStackParamList, "SessionSetup">;
 type SessionSetupScreenNavigationProp = StackNavigationProp<RootStackParamList, "SessionSetup">;
