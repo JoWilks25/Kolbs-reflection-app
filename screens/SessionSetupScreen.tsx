@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  Button,
 } from "react-native";
 import { RouteProp, useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
-import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS } from "../utils/constants";
+import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS, TEST_DURATION_PRESETS } from "../utils/constants";
 import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, checkLastSessionHasPendingReflection, deleteSession, createSession } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
 import { generateId } from "../utils/uuid";
@@ -268,7 +269,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
           <View style={styles.durationSection}>
             <Text style={styles.inputLabel}>Practice duration (optional)</Text>
             <View style={styles.presetButtonsContainer}>
-              {TARGET_DURATION_PRESETS.map((preset) => (
+              {TEST_DURATION_PRESETS.map((preset) => (
                 <TouchableOpacity
                   key={preset.seconds}
                   style={[
@@ -319,7 +320,6 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
               </View>
             </View>
           )}
-
           {/* Start Session Button */}
           <TouchableOpacity
             style={[styles.startButton, isStartDisabled && styles.startButtonDisabled]}

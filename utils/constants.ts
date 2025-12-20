@@ -90,6 +90,13 @@ export const TARGET_DURATION_PRESETS = [
   { label: '60 min', seconds: 60 * 60 },
 ];
 
+// Test duration presets for development/testing (remove before production)
+export const TEST_DURATION_PRESETS = [
+  { label: '10 sec', seconds: 10 },
+  { label: '30 sec', seconds: 30 },
+  { label: '1 min', seconds: 60 },
+];
+
 // Export a complete theme object for convenience
 export const THEME = {
   colors: COLORS,

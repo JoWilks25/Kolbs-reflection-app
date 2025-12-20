@@ -4,6 +4,7 @@ import RootStackNavigator from "./navigation/RootStackNavigator";
 import { initDatabase, getDatabase } from "./db/migrations";
 import { THEME } from "./utils/constants";
 import { getPracticeAreas } from "./db/queries";
+import { setupNotifications } from "./services/notificationService";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -14,6 +15,14 @@ export default function App() {
       try {
         // Initialize database
         await initDatabase();
+        
+        // Setup notifications (non-blocking - app continues if this fails)
+        try {
+          await setupNotifications();
+        } catch (notificationError) {
+          console.warn('Notification setup failed, continuing without notifications:', notificationError);
+        }
+        
         setIsLoading(false);
       } catch (err) {
         console.error('Failed to initialize app:', err);
