@@ -403,7 +403,6 @@ export async function checkLastSessionHasPendingReflection(
 ): Promise<{ hasPending: boolean; sessionId: string; endedAt: number } | null> {
   const db = getDatabase();
   const now = Date.now();
-  const fortyEightHoursMs = 48 * 60 * 60 * 1000;
 
   const result = await db.getFirstAsync<{
     id: string;
