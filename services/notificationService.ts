@@ -43,7 +43,7 @@ export const scheduleTargetReachedNotification = async (): Promise<void> => {
     console.log('Scheduling target reached notification...'); // ADD THIS
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Practice time complete!',
+        title: 'Practice time complete! 🎉',
         body: 'You reached your target duration. Continue or end session?',
         sound: true,
         data: { type: 'targetreached' },

@@ -59,7 +59,7 @@ const RootStackNavigator = () => {
         <Stack.Screen
           name="SessionActive"
           component={SessionActiveScreen}
-          options={{ 
+          options={{
             title: "Session Active",
             headerLeft: () => null,
             gestureEnabled: false,
@@ -68,7 +68,21 @@ const RootStackNavigator = () => {
         <Stack.Screen
           name="ReflectionFormat"
           component={ReflectionFormatScreen}
-          options={{ title: "Reflection Format" }}
+          options={({ navigation }) => ({
+            title: "Reflection Format",
+            headerLeft: () => (
+              <TouchableOpacity
+                onPress={() => navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Home' }],
+                })}
+                style={styles.backButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.backButtonIcon}>←</Text>
+              </TouchableOpacity>
+            ),
+          })}
         />
         <Stack.Screen
           name="ReflectionPrompts"
@@ -102,6 +116,14 @@ const styles = StyleSheet.create({
   },
   settingsIcon: {
     fontSize: 24,
+  },
+  backButton: {
+    marginLeft: SPACING.md,
+    padding: SPACING.xs,
+  },
+  backButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.primary, // or COLORS.text.primary, depending on your theme
   },
 });
 
