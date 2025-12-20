@@ -65,15 +65,9 @@ const SessionActiveScreen: React.FC = () => {
 
   // Target reached notification
   useEffect(() => {
-    // Only trigger if:
-    // 1. Target is set
-    // 2. Timer has reached target (exact match)
     if (targetDuration && sessionTimer === targetDuration && targetReached) {
-      // Trigger notification
       scheduleTargetReachedNotification();
-
-      // Trigger vibration pattern: [delay, vibrate, pause, vibrate]
-      Vibration.vibrate([0, 200, 100, 200]); // Short-long-short pattern
+      Vibration.vibrate([0, 200, 100, 200]);
     }
   }, [sessionTimer, targetDuration, targetReached]);
 
