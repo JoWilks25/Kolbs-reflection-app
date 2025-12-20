@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  Button,
 } from "react-native";
 import { RouteProp, useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -16,6 +17,7 @@ import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS, TEST_DURATION_PRE
 import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, checkLastSessionHasPendingReflection, deleteSession, createSession } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
 import { generateId } from "../utils/uuid";
+import { scheduleTargetReachedNotification } from "../services/notificationService";
 
 type SessionSetupScreenRouteProp = RouteProp<RootStackParamList, "SessionSetup">;
 type SessionSetupScreenNavigationProp = StackNavigationProp<RootStackParamList, "SessionSetup">;
@@ -319,7 +321,6 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
               </View>
             </View>
           )}
-
           {/* Start Session Button */}
           <TouchableOpacity
             style={[styles.startButton, isStartDisabled && styles.startButtonDisabled]}

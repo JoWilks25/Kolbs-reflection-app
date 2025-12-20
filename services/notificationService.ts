@@ -9,6 +9,8 @@ export const setupNotifications = async (): Promise<boolean> => {
     // Request permissions (iOS)
     const { status } = await Notifications.requestPermissionsAsync();
 
+    console.log('Notification permission status:', status); // ADD THIS
+
     if (status !== 'granted') {
       console.warn('Notification permissions not granted');
       return false;
@@ -20,9 +22,12 @@ export const setupNotifications = async (): Promise<boolean> => {
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
       }),
     });
 
+    console.log('Notification handler set successfully'); // ADD THIS
     return true;
   } catch (error) {
     console.error('Failed to setup notifications:', error);
@@ -35,7 +40,8 @@ export const setupNotifications = async (): Promise<boolean> => {
  */
 export const scheduleTargetReachedNotification = async (): Promise<void> => {
   try {
-    await Notifications.scheduleNotificationAsync({
+    console.log('Scheduling target reached notification...'); // ADD THIS
+    const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Practice time complete!',
         body: 'You reached your target duration. Continue or end session?',
@@ -44,6 +50,7 @@ export const scheduleTargetReachedNotification = async (): Promise<void> => {
       },
       trigger: null, // Immediate notification
     });
+    console.log('Notification scheduled with ID:', notificationId); // ADD THIS
   } catch (error) {
     console.error('Failed to schedule notification:', error);
   }

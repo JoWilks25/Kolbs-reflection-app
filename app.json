@@ -20,7 +20,8 @@
       "bundleIdentifier": "com.joanne.kolbsreflection",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app uses the microphone so you can record audio reflections.",
-        "NSFaceIDUsageDescription": "This app uses Face ID so only you can unlock your reflections."
+        "NSFaceIDUsageDescription": "This app uses Face ID so only you can unlock your reflections.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
