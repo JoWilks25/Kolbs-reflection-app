@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   TextInput,
+  Alert,
 } from "react-native";
-import { RouteProp, useNavigation } from "@react-navigation/native";
+import { RouteProp, useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS } from "../utils/constants";
-import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionForPracticeArea, createSession } from "../db/queries";
+import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, checkLastSessionHasPendingReflection, deleteSession, createSession } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
 import { generateId } from "../utils/uuid";
 
@@ -37,6 +38,13 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
   const [intentText, setIntentText] = useState("");
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
 
+  // Blocking state
+  const [hasPendingReflection, setHasPendingReflection] = useState(false);
+  const [pendingSessionInfo, setPendingSessionInfo] = useState<{
+    sessionId: string;
+    endedAt: number;
+  } | null>(null);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -58,6 +66,19 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
         } else {
           setPreviousIntent(result.previous_next_action);
         }
+
+        // Check for pending reflection
+        const pendingCheck = await checkLastSessionHasPendingReflection(practiceAreaId);
+        if (pendingCheck?.hasPending) {
+          setHasPendingReflection(true);
+          setPendingSessionInfo({
+            sessionId: pendingCheck.sessionId,
+            endedAt: pendingCheck.endedAt,
+          });
+        } else {
+          setHasPendingReflection(false);
+          setPendingSessionInfo(null);
+        }
       } catch (error) {
         console.error("Error loading session setup data:", error);
         setPreviousIntent("Error loading previous intent");
@@ -68,6 +89,30 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
 
     loadData();
   }, [practiceAreaId, navigation]);
+
+  // Refresh pending reflection check when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const checkPendingReflection = async () => {
+        try {
+          const pendingCheck = await checkLastSessionHasPendingReflection(practiceAreaId);
+          if (pendingCheck?.hasPending) {
+            setHasPendingReflection(true);
+            setPendingSessionInfo({
+              sessionId: pendingCheck.sessionId,
+              endedAt: pendingCheck.endedAt,
+            });
+          } else {
+            setHasPendingReflection(false);
+            setPendingSessionInfo(null);
+          }
+        } catch (error) {
+          console.error("Error checking pending reflection:", error);
+        }
+      };
+      checkPendingReflection();
+    }, [practiceAreaId])
+  );
 
   const shouldShowCollapsible = previousIntent.length > 100 &&
     previousIntent !== "No previous sessions" &&
@@ -103,14 +148,14 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
 
   const handleStartSession = async () => {
     try {
-      // Get the last session for this practice area to link as previous_session_id
-      const lastSession = await getLastSessionForPracticeArea(practiceAreaId);
+      // Get last session ID for sequential linking
+      const lastSessionId = await getLastSessionId(practiceAreaId);
 
       // Create new session object
       const newSession = {
         id: generateId(),
         practice_area_id: practiceAreaId,
-        previous_session_id: lastSession?.id || null,
+        previous_session_id: lastSessionId, // NULL for first session
         intent: intentText.trim(),
         target_duration_seconds: selectedDuration,
         started_at: Date.now(),
@@ -127,11 +172,49 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
       navigation.navigate("SessionActive");
     } catch (error) {
       console.error("Error starting session:", error);
-      // TODO: Show error to user
+      Alert.alert("Error", "Failed to start session. Please try again.");
     }
   };
 
-  const isStartDisabled = intentText.trim().length === 0;
+  const handleCompleteReflection = () => {
+    // Navigate to SeriesTimeline with focusSessionId to let user complete reflection
+    navigation.navigate("SeriesTimeline", {
+      practiceAreaId,
+      focusSessionId: pendingSessionInfo?.sessionId
+    });
+  };
+
+  const handleDeleteSession = async () => {
+    if (!pendingSessionInfo) return;
+
+    try {
+      const deleted = await deleteSession(pendingSessionInfo.sessionId);
+      if (deleted) {
+        setHasPendingReflection(false);
+        setPendingSessionInfo(null);
+        // Refresh the data to update the UI
+        const pendingCheck = await checkLastSessionHasPendingReflection(practiceAreaId);
+        if (pendingCheck?.hasPending) {
+          setHasPendingReflection(true);
+          setPendingSessionInfo({
+            sessionId: pendingCheck.sessionId,
+            endedAt: pendingCheck.endedAt,
+          });
+        }
+      } else {
+        // Show error: Cannot delete session with reflection
+        Alert.alert(
+          "Cannot Delete",
+          "This session has a completed reflection and cannot be deleted."
+        );
+      }
+    } catch (error) {
+      console.error("Error deleting session:", error);
+      Alert.alert("Error", "Failed to delete session. Please try again.");
+    }
+  };
+
+  const isStartDisabled = intentText.trim().length === 0 || hasPendingReflection;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -210,6 +293,32 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
               You'll get a notification when time is up, but can continue practicing.
             </Text>
           </View>
+
+          {/* Pending Reflection Warning Card */}
+          {hasPendingReflection && (
+            <View style={styles.warningCard}>
+              <Text style={styles.warningCardTitle}>Complete Reflection First</Text>
+              <Text style={styles.warningCardText}>
+                You need to complete the reflection for your last session before starting a new one.
+              </Text>
+              <View style={styles.warningCardActions}>
+                <TouchableOpacity
+                  style={styles.warningCardButtonPrimary}
+                  onPress={handleCompleteReflection}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.warningCardButtonTextPrimary}>Complete Reflection</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.warningCardButtonSecondary}
+                  onPress={handleDeleteSession}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.warningCardButtonTextSecondary}>Delete Session</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Start Session Button */}
           <TouchableOpacity
@@ -385,6 +494,69 @@ const styles = StyleSheet.create({
   },
   startButtonTextDisabled: {
     color: COLORS.text.disabled,
+  },
+  warningCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.warning,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  warningCardTitle: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.sm,
+  },
+  warningCardText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
+    color: COLORS.text.secondary,
+    marginBottom: SPACING.md,
+    lineHeight: TYPOGRAPHY.fontSize.sm * TYPOGRAPHY.lineHeight.normal,
+  },
+  warningCardActions: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  warningCardButtonPrimary: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  warningCardButtonTextPrimary: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
+  },
+  warningCardButtonSecondary: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.neutral[300],
+  },
+  warningCardButtonTextSecondary: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.secondary,
   },
 });
 

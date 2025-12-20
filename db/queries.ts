@@ -376,6 +376,92 @@ export async function getLastSessionForPracticeArea(practiceAreaId: string): Pro
 }
 
 /**
+ * Get the last session ID for a practice area (for sequential linking)
+ * @param practiceAreaId - The ID of the practice area
+ * @returns The ID of the most recent session, or null if no sessions exist
+ */
+export async function getLastSessionId(practiceAreaId: string): Promise<string | null> {
+  const db = getDatabase();
+  const result = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM sessions
+     WHERE practice_area_id = ?
+       AND is_deleted = 0
+     ORDER BY started_at DESC
+     LIMIT 1`,
+    [practiceAreaId]
+  );
+  return result?.id || null;
+}
+
+/**
+ * Check if the last session in a practice area has a pending reflection
+ * @param practiceAreaId - The ID of the practice area
+ * @returns Object with hasPending flag and session info, or null if no last session
+ */
+export async function checkLastSessionHasPendingReflection(
+  practiceAreaId: string
+): Promise<{ hasPending: boolean; sessionId: string; endedAt: number } | null> {
+  const db = getDatabase();
+  const now = Date.now();
+  const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+
+  const result = await db.getFirstAsync<{
+    id: string;
+    ended_at: number;
+    has_reflection: number;
+  }>(
+    `SELECT s.id, s.ended_at,
+            CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END as has_reflection
+     FROM sessions s
+     LEFT JOIN reflections r ON r.session_id = s.id
+     WHERE s.practice_area_id = ?
+       AND s.is_deleted = 0
+       AND s.ended_at IS NOT NULL
+     ORDER BY s.started_at DESC
+     LIMIT 1`,
+    [practiceAreaId]
+  );
+
+  if (!result) return null;
+
+  const hoursSinceEnd = (now - result.ended_at) / (1000 * 60 * 60);
+  const hasPending = result.has_reflection === 0 && hoursSinceEnd <= 48;
+
+  return {
+    hasPending,
+    sessionId: result.id,
+    endedAt: result.ended_at,
+  };
+}
+
+/**
+ * Soft delete a session (only if no reflection exists)
+ * @param sessionId - The ID of the session to delete
+ * @returns True if deleted, false if reflection exists (cannot delete)
+ */
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  const db = getDatabase();
+
+  // Check if reflection exists
+  const reflection = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM reflections WHERE session_id = ?`,
+    [sessionId]
+  );
+
+  if (reflection) {
+    return false; // Cannot delete session with reflection
+  }
+
+  // Soft delete the session
+  await db.runAsync(
+    `UPDATE sessions SET is_deleted = 1 WHERE id = ?`,
+    [sessionId]
+  );
+
+  return true;
+}
+
+/**
  * Create a new session
  * @param session - The session object to insert (without is_deleted, which defaults to 0)
  * @returns The created session with is_deleted set to 0
