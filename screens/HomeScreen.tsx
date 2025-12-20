@@ -122,6 +122,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   useFocusEffect(
     React.useCallback(() => {
       loadPendingReflections();
+      loadPracticeAreas();
     }, [])
   );
 
