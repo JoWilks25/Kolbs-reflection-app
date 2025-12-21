@@ -122,6 +122,7 @@ export interface AppState {
   sessionTimer: number;
   targetDuration: number | null;  // Target duration in seconds (null = no target)
   targetReached: boolean;  // Flag when target duration is hit
+  lastEndedSessionId: string | null;  // ID of last ended session for reflection flow
 
   // Reflection draft state
   reflectionDraft: ReflectionDraft;
@@ -143,6 +144,7 @@ export interface AppActions {
   startSession: (session: Session, targetDuration?: number | null) => void;
   updateTimer: () => void;
   endSession: () => void;
+  clearLastEndedSession: () => void;
 
   // Reflection draft actions
   setReflectionFormat: (format: ReflectionFormat) => void;

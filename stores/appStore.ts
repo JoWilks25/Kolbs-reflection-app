@@ -51,6 +51,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   sessionTimer: 0,
   targetDuration: null,
   targetReached: false,
+  lastEndedSessionId: null,
 
   // ============================================================================
   // Reflection Draft State
@@ -121,15 +122,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   /**
    * End the current session - clears all session state including target fields
+   * Preserves lastEndedSessionId for reflection flow
    */
   endSession: () =>
-    set({
+    set((state) => ({
+      lastEndedSessionId: state.currentSession?.id || null,
       currentSession: null,
       sessionStartTime: null,
       sessionTimer: 0,
       targetDuration: null,
       targetReached: false,
-    }),
+    })),
+
+  /**
+   * Clear the last ended session ID (after reflection is saved)
+   */
+  clearLastEndedSession: () => set({ lastEndedSessionId: null }),
 
   // ============================================================================
   // Reflection Draft Actions
