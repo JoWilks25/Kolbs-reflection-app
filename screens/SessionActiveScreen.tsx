@@ -8,6 +8,7 @@ import {
   Alert,
   ScrollView,
   Vibration,
+  AppState,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -63,6 +64,22 @@ const SessionActiveScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [updateTimer]);
 
+  // AppState handling for backgrounding
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background') {
+        // Timer interval will be cleared, but sessionStartTime is preserved
+        // No action needed - interval cleanup happens automatically
+      } else if (nextAppState === 'active') {
+        // Timer will recalculate from sessionStartTime automatically
+        // via the existing updateTimer() logic
+        updateTimer();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [updateTimer]);
+
   // Target reached notification
   useEffect(() => {
     if (targetDuration && sessionTimer === targetDuration && targetReached) {
@@ -71,8 +88,8 @@ const SessionActiveScreen: React.FC = () => {
     }
   }, [sessionTimer, targetDuration, targetReached]);
 
-  // Handle end session
-  const handleEndSession = async () => {
+  // Handle end session and reflect now
+  const handleEndAndReflectNow = async () => {
     if (!currentSession) return;
 
     setIsEnding(true);
@@ -80,14 +97,32 @@ const SessionActiveScreen: React.FC = () => {
       // Update database with end time
       await updateSessionEndTime(currentSession.id, Date.now());
 
-      // Store session ID before clearing state
-      const sessionId = currentSession.id;
-
       // Navigate to reflection
       navigation.navigate("ReflectionFormat");
 
+      // Clear Zustand state (preserves lastEndedSessionId)
+      endSession();
+    } catch (error) {
+      console.error("Error ending session:", error);
+      Alert.alert("Error", "Failed to end session. Please try again.");
+      setIsEnding(false);
+    }
+  };
+
+  // Handle end session and reflect later
+  const handleEndAndReflectLater = async () => {
+    if (!currentSession) return;
+
+    setIsEnding(true);
+    try {
+      // Update database with end time
+      await updateSessionEndTime(currentSession.id, Date.now());
+
       // Clear Zustand state
       endSession();
+
+      // Navigate to Home (where pending reflections banner will show)
+      navigation.navigate("Home");
     } catch (error) {
       console.error("Error ending session:", error);
       Alert.alert("Error", "Failed to end session. Please try again.");
@@ -181,19 +216,28 @@ const SessionActiveScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* End Session Button - Fixed at bottom */}
+      {/* End Session Buttons - Fixed at bottom */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={[styles.endButton, isEnding && styles.endButtonDisabled]}
-          onPress={handleEndSession}
+          onPress={handleEndAndReflectNow}
           disabled={isEnding}
           activeOpacity={0.7}
         >
           {isEnding ? (
             <ActivityIndicator size="small" color={COLORS.text.inverse} />
           ) : (
-            <Text style={styles.endButtonText}>End Session</Text>
+            <Text style={styles.endButtonText}>End & Reflect Now</Text>
           )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.reflectLaterButton}
+          onPress={handleEndAndReflectLater}
+          disabled={isEnding}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.reflectLaterText}>End Session & Reflect Later</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -336,6 +380,18 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: COLORS.text.inverse,
+  },
+  reflectLaterButton: {
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: SPACING.sm,
+  },
+  reflectLaterText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.secondary,
+    textDecorationLine: "underline",
   },
 });
 
