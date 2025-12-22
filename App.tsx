@@ -5,6 +5,7 @@ import { initDatabase, getDatabase } from "./db/migrations";
 import { THEME } from "./utils/constants";
 import { getPracticeAreas } from "./db/queries";
 import { setupNotifications } from "./services/notificationService";
+import { cleanupOrphanedDrafts } from "./utils/draftCleanup";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -15,6 +16,13 @@ export default function App() {
       try {
         // Initialize database
         await initDatabase();
+        
+        // Clean up orphaned reflection drafts (non-blocking)
+        try {
+          await cleanupOrphanedDrafts();
+        } catch (cleanupError) {
+          console.warn('Draft cleanup failed, continuing:', cleanupError);
+        }
         
         // Setup notifications (non-blocking - app continues if this fails)
         try {
