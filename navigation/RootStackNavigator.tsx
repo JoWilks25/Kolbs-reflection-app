@@ -18,7 +18,7 @@ export type RootStackParamList = {
   SessionSetup: { practiceAreaId: string };
   SessionActive: undefined;
   ReflectionFormat: undefined;
-  ReflectionPrompts: undefined;
+  ReflectionPrompts: { sessionId?: string; editMode?: boolean } | undefined;
   ReflectionFeedback: undefined;
   SeriesTimeline: { practiceAreaId: string; focusSessionId?: string };
   Settings: undefined;

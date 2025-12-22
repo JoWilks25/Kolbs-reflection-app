@@ -515,3 +515,17 @@ export async function getSessionById(sessionId: string): Promise<Session | null>
   return result || null;
 }
 
+/**
+ * Get a reflection by session ID
+ * @param sessionId - The ID of the session
+ * @returns Reflection object or null if not found
+ */
+export async function getReflectionBySessionId(sessionId: string): Promise<any | null> {
+  const db = getDatabase();
+  const result = await db.getFirstAsync<any>(
+    `SELECT * FROM reflections WHERE session_id = ?`,
+    [sessionId]
+  );
+  return result || null;
+}
+
