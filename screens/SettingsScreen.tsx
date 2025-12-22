@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from "react-native";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { checkDeviceSecurity } from "../services/securityService";
+import { cleanupOrphanedDrafts } from "../utils/draftCleanup";
 
 /**
  * Settings Screen (Minimal Implementation)
@@ -12,6 +13,7 @@ import { checkDeviceSecurity } from "../services/securityService";
 const SettingsScreen: React.FC = () => {
   const [isSecure, setIsSecure] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCleaningDrafts, setIsCleaningDrafts] = useState(false);
 
   useEffect(() => {
     const checkSecurity = async () => {
@@ -28,6 +30,29 @@ const SettingsScreen: React.FC = () => {
 
     checkSecurity();
   }, []);
+
+  const handleCleanupDrafts = async () => {
+    setIsCleaningDrafts(true);
+    try {
+      const cleanedCount = await cleanupOrphanedDrafts();
+      Alert.alert(
+        'Cleanup Complete',
+        cleanedCount > 0
+          ? `Removed ${cleanedCount} orphaned draft${cleanedCount === 1 ? '' : 's'}.`
+          : 'No orphaned drafts found. Storage is clean.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error during manual cleanup:', error);
+      Alert.alert(
+        'Cleanup Failed',
+        'An error occurred while cleaning up drafts. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsCleaningDrafts(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -71,6 +96,33 @@ const SettingsScreen: React.FC = () => {
 
           <Text style={styles.privacyStatement}>
             All data is stored locally on your device, encrypted at rest. No cloud sync.
+          </Text>
+        </View>
+      </View>
+
+      {/* Storage Management Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Storage Management</Text>
+
+        <View style={styles.card}>
+          <Text style={styles.cardDescription}>
+            Clean up old reflection drafts that are no longer needed.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.cleanupButton, isCleaningDrafts && styles.cleanupButtonDisabled]}
+            onPress={handleCleanupDrafts}
+            disabled={isCleaningDrafts}
+          >
+            {isCleaningDrafts ? (
+              <ActivityIndicator size="small" color={COLORS.surface} />
+            ) : (
+              <Text style={styles.cleanupButtonText}>Clean Up Old Drafts</Text>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.cleanupHint}>
+            Removes drafts for completed, deleted, or sessions older than 48 hours.
           </Text>
         </View>
       </View>
@@ -160,6 +212,36 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.text.secondary,
     lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.sm,
+  },
+  cardDescription: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.sm,
+    marginBottom: SPACING.md,
+  },
+  cleanupButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  cleanupButtonDisabled: {
+    opacity: 0.6,
+  },
+  cleanupButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.surface,
+  },
+  cleanupHint: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.xs,
+    marginTop: SPACING.sm,
+    textAlign: 'center',
   },
 });
 
