@@ -501,3 +501,17 @@ export async function updateSessionEndTime(sessionId: string, endedAt: number): 
   );
 }
 
+/**
+ * Get a session by ID
+ * @param sessionId - The ID of the session
+ * @returns Session object or null if not found
+ */
+export async function getSessionById(sessionId: string): Promise<Session | null> {
+  const db = getDatabase();
+  const result = await db.getFirstAsync<Session>(
+    `SELECT * FROM sessions WHERE id = ? AND is_deleted = 0`,
+    [sessionId]
+  );
+  return result || null;
+}
+
