@@ -117,9 +117,9 @@ function debounce<T extends (...args: any[]) => any>(
 const ReflectionPromptsScreen: React.FC = () => {
   const navigation = useNavigation<ReflectionPromptsScreenNavigationProp>();
   const route = useRoute<ReflectionPromptsScreenRouteProp>();
-  const { 
-    lastEndedSessionId, 
-    reflectionDraft, 
+  const {
+    lastEndedSessionId,
+    reflectionDraft,
     updateReflectionDraft,
     setReflectionFormat,
   } = useAppStore();
@@ -129,6 +129,7 @@ const ReflectionPromptsScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [draftFields, setDraftFields] = useState<Set<string>>(new Set());
 
   const inputRef = useRef<TextInput>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -148,8 +149,7 @@ const ReflectionPromptsScreen: React.FC = () => {
   // Guard: Redirect if no format selected (skip in edit mode, we'll load it)
   useEffect(() => {
     if (isEditMode) return; // Skip format check in edit mode
-    
-    if (!reflectionDraft.format) {
+
     if (!reflectionDraft.format) {
       Alert.alert(
         "No Format Selected",
@@ -191,23 +191,56 @@ const ReflectionPromptsScreen: React.FC = () => {
 
         // Load draft/reflection based on mode
         if (isEditMode) {
-          // Edit mode: Priority 1 - AsyncStorage draft, Priority 2 - DB reflection
+          // Edit mode: Priority 1 - Check DB reflection first
+          const reflection = await getReflectionBySessionId(sessionId);
           const draft = await loadDraftFromStorage(sessionId);
-          if (draft) {
-            // Restore draft to store
+
+          if (reflection) {
+            // DB reflection exists - check if all fields are filled
+            const dbStep2 = reflection.step2_answer?.trim() || "";
+            const dbStep3 = reflection.step3_answer?.trim() || "";
+            const dbStep4 = reflection.step4_answer?.trim() || "";
+            const allFieldsFilled = dbStep2 && dbStep3 && dbStep4;
+
+            if (allFieldsFilled) {
+              // All fields filled in DB - use DB only (ignore draft)
+              setReflectionFormat(reflection.format);
+              updateReflectionDraft("step2", dbStep2);
+              updateReflectionDraft("step3", dbStep3);
+              updateReflectionDraft("step4", dbStep4);
+              setDraftFields(new Set()); // No draft fields used
+            } else {
+              // Some fields empty - use DB for filled, draft for empty
+              setReflectionFormat(reflection.format);
+
+              // Track which fields came from draft
+              const draftFieldsSet: Set<string> = new Set();
+
+              const step2Value = dbStep2 || draft?.step2 || "";
+              const step3Value = dbStep3 || draft?.step3 || "";
+              const step4Value = dbStep4 || draft?.step4 || "";
+
+              updateReflectionDraft("step2", step2Value);
+              if (!dbStep2 && draft?.step2) draftFieldsSet.add("step2");
+
+              updateReflectionDraft("step3", step3Value);
+              if (!dbStep3 && draft?.step3) draftFieldsSet.add("step3");
+
+              updateReflectionDraft("step4", step4Value);
+              if (!dbStep4 && draft?.step4) draftFieldsSet.add("step4");
+
+              // Store draft fields for indicator display
+              setDraftFields(draftFieldsSet);
+            }
+          } else if (draft) {
+            // No DB reflection - use draft
             if (draft.format) setReflectionFormat(draft.format);
             if (draft.step2) updateReflectionDraft("step2", draft.step2);
             if (draft.step3) updateReflectionDraft("step3", draft.step3);
             if (draft.step4) updateReflectionDraft("step4", draft.step4);
-          } else {
-            // Load from DB
-            const reflection = await getReflectionBySessionId(sessionId);
-            if (reflection) {
-              setReflectionFormat(reflection.format);
-              updateReflectionDraft("step2", reflection.step2_answer || "");
-              updateReflectionDraft("step3", reflection.step3_answer || "");
-              updateReflectionDraft("step4", reflection.step4_answer || "");
-            }
+
+            // All fields from draft
+            setDraftFields(new Set(["step2", "step3", "step4"]));
           }
         } else {
           // New reflection mode: Only restore if session matches AND has incomplete fields
@@ -287,7 +320,7 @@ const ReflectionPromptsScreen: React.FC = () => {
   // Handle text change with character limit
   const handleTextChange = (text: string) => {
     const field = getCurrentField();
-    
+
     if (text.length <= APP_CONSTANTS.MAX_REFLECTION_CHARS) {
       updateReflectionDraft(field, text);
     } else {
@@ -419,6 +452,13 @@ const ReflectionPromptsScreen: React.FC = () => {
             >
               {currentLength} / {maxChars}
             </Text>
+          )}
+          {draftFields.has(getCurrentField()) && (
+            <View style={styles.draftIndicator}>
+              <Text style={styles.draftIndicatorText}>
+                ⚠️ Loaded from draft (app may have crashed at this step)
+              </Text>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -577,6 +617,19 @@ const styles = StyleSheet.create({
   charCounterWarning: {
     color: COLORS.warning,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  draftIndicator: {
+    backgroundColor: "rgba(255, 152, 0, 0.1)", // Warning color with 10% opacity
+    borderRadius: 8,
+    padding: SPACING.sm,
+    marginTop: SPACING.xs,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.warning,
+  },
+  draftIndicatorText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.warning,
+    fontStyle: "italic",
   },
   buttonContainer: {
     flexDirection: "row",
