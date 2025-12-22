@@ -529,3 +529,103 @@ export async function getReflectionBySessionId(sessionId: string): Promise<any |
   return result || null;
 }
 
+/**
+ * Insert a new reflection
+ * @param reflection - The reflection object to insert
+ */
+export async function insertReflection(reflection: {
+  id: string;
+  session_id: string;
+  format: number;
+  step2_answer: string;
+  step3_answer: string;
+  step4_answer: string;
+  feedback_rating: number | null;
+  feedback_note: string | null;
+  completed_at: number;
+  updated_at: number | null;
+}): Promise<void> {
+  const db = getDatabase();
+  await db.runAsync(
+    `INSERT INTO reflections (
+      id, session_id, format,
+      step2_answer, step3_answer, step4_answer,
+      feedback_rating, feedback_note,
+      completed_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      reflection.id,
+      reflection.session_id,
+      reflection.format,
+      reflection.step2_answer,
+      reflection.step3_answer,
+      reflection.step4_answer,
+      reflection.feedback_rating,
+      reflection.feedback_note,
+      reflection.completed_at,
+      reflection.updated_at,
+    ]
+  );
+}
+
+/**
+ * Update an existing reflection
+ * @param sessionId - The session ID of the reflection to update
+ * @param updates - The fields to update
+ */
+export async function updateReflection(
+  sessionId: string,
+  updates: {
+    format?: number;
+    step2_answer?: string;
+    step3_answer?: string;
+    step4_answer?: string;
+    feedback_rating?: number | null;
+    feedback_note?: string | null;
+    updated_at: number;
+  }
+): Promise<void> {
+  const db = getDatabase();
+  
+  // Build dynamic update query based on provided fields
+  const updateFields: string[] = [];
+  const values: any[] = [];
+  
+  if (updates.format !== undefined) {
+    updateFields.push('format = ?');
+    values.push(updates.format);
+  }
+  if (updates.step2_answer !== undefined) {
+    updateFields.push('step2_answer = ?');
+    values.push(updates.step2_answer);
+  }
+  if (updates.step3_answer !== undefined) {
+    updateFields.push('step3_answer = ?');
+    values.push(updates.step3_answer);
+  }
+  if (updates.step4_answer !== undefined) {
+    updateFields.push('step4_answer = ?');
+    values.push(updates.step4_answer);
+  }
+  if (updates.feedback_rating !== undefined) {
+    updateFields.push('feedback_rating = ?');
+    values.push(updates.feedback_rating);
+  }
+  if (updates.feedback_note !== undefined) {
+    updateFields.push('feedback_note = ?');
+    values.push(updates.feedback_note);
+  }
+  
+  // Always update updated_at
+  updateFields.push('updated_at = ?');
+  values.push(updates.updated_at);
+  
+  // Add sessionId for WHERE clause
+  values.push(sessionId);
+  
+  await db.runAsync(
+    `UPDATE reflections SET ${updateFields.join(', ')} WHERE session_id = ?`,
+    values
+  );
+}
+
