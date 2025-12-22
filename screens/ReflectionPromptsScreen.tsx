@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,16 +10,24 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  AppState,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { useAppStore } from "../stores/appStore";
-import { getSessionById, getPracticeAreaById } from "../db/queries";
+import { getSessionById, getPracticeAreaById, getReflectionBySessionId } from "../db/queries";
 import { COLORS, SPACING, TYPOGRAPHY, APP_CONSTANTS } from "../utils/constants";
 import type { ReflectionFormat } from "../utils/types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Toast from "react-native-toast-message";
 
 type ReflectionPromptsScreenNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  "ReflectionPrompts"
+>;
+
+type ReflectionPromptsScreenRouteProp = RouteProp<
   RootStackParamList,
   "ReflectionPrompts"
 >;
@@ -46,19 +54,102 @@ const PROMPTS: Record<ReflectionFormat, { step2: string; step3: string; step4: s
   },
 };
 
+// AsyncStorage helper functions for draft persistence
+const saveDraftToStorage = async (
+  sessionId: string,
+  draft: {
+    format: ReflectionFormat | null;
+    step2: string;
+    step3: string;
+    step4: string;
+  }
+) => {
+  try {
+    await AsyncStorage.setItem(
+      `reflection_draft_${sessionId}`,
+      JSON.stringify({ ...draft, sessionId })
+    );
+  } catch (error) {
+    console.error("Failed to save draft:", error);
+    Toast.show({
+      type: "error",
+      text1: "Auto-save failed",
+      text2: "Please try again.",
+      position: "bottom",
+      visibilityTime: 3000,
+    });
+  }
+};
+
+const loadDraftFromStorage = async (sessionId: string) => {
+  try {
+    const draftJson = await AsyncStorage.getItem(`reflection_draft_${sessionId}`);
+    if (draftJson) {
+      return JSON.parse(draftJson);
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to load draft:", error);
+    return null;
+  }
+};
+
+const clearDraftFromStorage = async (sessionId: string) => {
+  try {
+    await AsyncStorage.removeItem(`reflection_draft_${sessionId}`);
+  } catch (error) {
+    console.error("Failed to clear draft:", error);
+  }
+};
+
+// Debounce helper
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
 const ReflectionPromptsScreen: React.FC = () => {
   const navigation = useNavigation<ReflectionPromptsScreenNavigationProp>();
-  const { lastEndedSessionId, reflectionDraft, updateReflectionDraft } = useAppStore();
+  const route = useRoute<ReflectionPromptsScreenRouteProp>();
+  const { 
+    lastEndedSessionId, 
+    reflectionDraft, 
+    updateReflectionDraft,
+    setReflectionFormat,
+  } = useAppStore();
 
   const [practiceAreaName, setPracticeAreaName] = useState<string>("");
   const [sessionIntent, setSessionIntent] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const inputRef = useRef<TextInput>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Guard: Redirect if no format selected
+  // Determine if we're in edit mode
+  const isEditMode = route.params?.editMode || false;
+
+  // Debounced save function
+  const debouncedSave = useMemo(
+    () =>
+      debounce((sessionId: string, draft: any) => {
+        saveDraftToStorage(sessionId, draft);
+      }, 500),
+    []
+  );
+
+  // Guard: Redirect if no format selected (skip in edit mode, we'll load it)
   useEffect(() => {
+    if (isEditMode) return; // Skip format check in edit mode
+    
+    if (!reflectionDraft.format) {
     if (!reflectionDraft.format) {
       Alert.alert(
         "No Format Selected",
@@ -68,8 +159,9 @@ const ReflectionPromptsScreen: React.FC = () => {
       return;
     }
 
-    // Guard: Redirect if no session context
-    if (!lastEndedSessionId) {
+    // Guard: Redirect if no session context (skip in edit mode with explicit sessionId)
+    const sessionId = route.params?.sessionId || lastEndedSessionId;
+    if (!sessionId) {
       Alert.alert(
         "No Session Found",
         "Please complete a session before reflecting.",
@@ -78,10 +170,10 @@ const ReflectionPromptsScreen: React.FC = () => {
       return;
     }
 
-    // Load session context
+    // Load session context and draft
     const loadSessionData = async () => {
       try {
-        const session = await getSessionById(lastEndedSessionId);
+        const session = await getSessionById(sessionId);
         if (!session) {
           Alert.alert("Error", "Session not found.", [
             { text: "OK", onPress: () => navigation.navigate("Home") },
@@ -89,11 +181,54 @@ const ReflectionPromptsScreen: React.FC = () => {
           return;
         }
 
+        setCurrentSessionId(sessionId);
+
         const practiceArea = await getPracticeAreaById(session.practice_area_id);
         if (practiceArea) {
           setPracticeAreaName(practiceArea.name);
         }
         setSessionIntent(session.intent);
+
+        // Load draft/reflection based on mode
+        if (isEditMode) {
+          // Edit mode: Priority 1 - AsyncStorage draft, Priority 2 - DB reflection
+          const draft = await loadDraftFromStorage(sessionId);
+          if (draft) {
+            // Restore draft to store
+            if (draft.format) setReflectionFormat(draft.format);
+            if (draft.step2) updateReflectionDraft("step2", draft.step2);
+            if (draft.step3) updateReflectionDraft("step3", draft.step3);
+            if (draft.step4) updateReflectionDraft("step4", draft.step4);
+          } else {
+            // Load from DB
+            const reflection = await getReflectionBySessionId(sessionId);
+            if (reflection) {
+              setReflectionFormat(reflection.format);
+              updateReflectionDraft("step2", reflection.step2_answer || "");
+              updateReflectionDraft("step3", reflection.step3_answer || "");
+              updateReflectionDraft("step4", reflection.step4_answer || "");
+            }
+          }
+        } else {
+          // New reflection mode: Only restore if session matches AND has incomplete fields
+          const draft = await loadDraftFromStorage(sessionId);
+          if (draft && draft.sessionId === sessionId) {
+            // Check if any fields are blank (crash recovery indicator)
+            const hasIncompleteFields =
+              !draft.step2?.trim() || !draft.step3?.trim() || !draft.step4?.trim();
+
+            if (hasIncompleteFields) {
+              // Restore draft - crash recovery
+              if (draft.format) setReflectionFormat(draft.format);
+              if (draft.step2) updateReflectionDraft("step2", draft.step2);
+              if (draft.step3) updateReflectionDraft("step3", draft.step3);
+              if (draft.step4) updateReflectionDraft("step4", draft.step4);
+            } else {
+              // All fields complete but not saved - clear stale draft
+              clearDraftFromStorage(sessionId);
+            }
+          }
+        }
       } catch (error) {
         console.error("Error loading session data:", error);
         Alert.alert("Error", "Failed to load session data.", [
@@ -105,7 +240,7 @@ const ReflectionPromptsScreen: React.FC = () => {
     };
 
     loadSessionData();
-  }, [lastEndedSessionId, reflectionDraft.format, navigation]);
+  }, [lastEndedSessionId, reflectionDraft.format, navigation, isEditMode, route.params?.sessionId]);
 
   // Auto-focus input when step changes
   useEffect(() => {
@@ -114,6 +249,21 @@ const ReflectionPromptsScreen: React.FC = () => {
     }, 100);
     return () => clearTimeout(timer);
   }, [currentStepIndex]);
+
+  // Autosave on app background
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "background" && currentSessionId) {
+        saveDraftToStorage(currentSessionId, {
+          format: reflectionDraft.format,
+          step2: reflectionDraft.step2,
+          step3: reflectionDraft.step3,
+          step4: reflectionDraft.step4,
+        });
+      }
+    });
+    return () => subscription.remove();
+  }, [currentSessionId, reflectionDraft]);
 
   // Get current step field name
   const getCurrentField = (): "step2" | "step3" | "step4" => {
@@ -134,10 +284,33 @@ const ReflectionPromptsScreen: React.FC = () => {
     return PROMPTS[reflectionDraft.format][field];
   };
 
-  // Handle text change
+  // Handle text change with character limit
   const handleTextChange = (text: string) => {
     const field = getCurrentField();
-    updateReflectionDraft(field, text);
+    
+    if (text.length <= APP_CONSTANTS.MAX_REFLECTION_CHARS) {
+      updateReflectionDraft(field, text);
+    } else {
+      // Show warning toast when limit reached
+      Toast.show({
+        type: "warning",
+        text1: "Maximum 3000 characters reached",
+        position: "bottom",
+        visibilityTime: 2000,
+      });
+    }
+  };
+
+  // Handle blur - trigger debounced save
+  const handleBlur = () => {
+    if (currentSessionId) {
+      debouncedSave(currentSessionId, {
+        format: reflectionDraft.format,
+        step2: reflectionDraft.step2,
+        step3: reflectionDraft.step3,
+        step4: reflectionDraft.step4,
+      });
+    }
   };
 
   // Navigation handlers
@@ -228,6 +401,7 @@ const ReflectionPromptsScreen: React.FC = () => {
             style={styles.textInput}
             value={getCurrentValue()}
             onChangeText={handleTextChange}
+            onBlur={handleBlur}
             placeholder="Type or use voice input..."
             placeholderTextColor={COLORS.text.disabled}
             multiline
@@ -237,7 +411,12 @@ const ReflectionPromptsScreen: React.FC = () => {
             textAlignVertical="top"
           />
           {showCharCounter && (
-            <Text style={styles.charCounter}>
+            <Text
+              style={[
+                styles.charCounter,
+                currentLength >= 2800 && styles.charCounterWarning,
+              ]}
+            >
               {currentLength} / {maxChars}
             </Text>
           )}
@@ -280,7 +459,7 @@ const ReflectionPromptsScreen: React.FC = () => {
                   !canComplete && styles.buttonTextDisabled,
                 ]}
               >
-                Complete
+                {isEditMode ? "Save" : "Complete"}
               </Text>
             </TouchableOpacity>
             {!canComplete && (
@@ -394,6 +573,10 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     textAlign: "right",
     marginTop: SPACING.xs,
+  },
+  charCounterWarning: {
+    color: COLORS.warning,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   buttonContainer: {
     flexDirection: "row",
