@@ -97,18 +97,17 @@ const SessionActiveScreen: React.FC = () => {
       // Update database with end time
       await updateSessionEndTime(currentSession.id, Date.now());
 
+      // Store session ID in Zustand BEFORE navigation
+      endSession();  // ← Move this BEFORE navigation
+
       // Navigate to reflection
       navigation.navigate("ReflectionFormat");
-
-      // Clear Zustand state (preserves lastEndedSessionId)
-      endSession();
     } catch (error) {
       console.error("Error ending session:", error);
       Alert.alert("Error", "Failed to end session. Please try again.");
       setIsEnding(false);
     }
   };
-
   // Handle end session and reflect later
   const handleEndAndReflectLater = async () => {
     if (!currentSession) return;
