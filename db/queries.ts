@@ -659,3 +659,44 @@ export async function getSeriesSessions(
   return results as SessionWithReflection[];
 }
 
+/**
+ * Extended session type with full reflection data for Session Detail modal
+ */
+export interface SessionWithFullReflection extends SessionWithReflection {
+  step2_answer: string | null;
+  step3_answer: string | null;
+  step4_answer: string | null;
+  feedback_note: string | null;
+}
+
+/**
+ * Get a session with full reflection data by session ID
+ * Used for Session Detail modal to display complete reflection content
+ * @param sessionId - The ID of the session
+ * @returns Session with full reflection data or null if not found
+ */
+export async function getSessionWithFullReflection(
+  sessionId: string
+): Promise<SessionWithFullReflection | null> {
+  const db = getDatabase();
+  
+  const result = await db.getFirstAsync<any>(
+    `SELECT s.*, 
+            r.format, 
+            r.feedback_rating, 
+            r.updated_at as reflection_updated_at,
+            r.completed_at as reflection_completed_at,
+            r.step2_answer,
+            r.step3_answer,
+            r.step4_answer,
+            r.feedback_note
+     FROM sessions s
+     LEFT JOIN reflections r ON r.session_id = s.id
+     WHERE s.id = ?
+       AND s.is_deleted = 0`,
+    [sessionId]
+  );
+  
+  return result as SessionWithFullReflection | null;
+}
+

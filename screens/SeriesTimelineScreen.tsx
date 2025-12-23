@@ -6,15 +6,18 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { SessionWithReflection, ReflectionFormat, FeedbackRating } from "../utils/types";
-import { getSeriesSessions, getPracticeAreaById } from "../db/queries";
+import { getSeriesSessions, getPracticeAreaById, deleteSession } from "../db/queries";
 import { getReflectionState, getReflectionBadge } from "../services/reflectionStateService";
 import { formatDateTime } from "../utils/timeFormatting";
+import SessionDetailModal from "../components/SessionDetailModal";
+import { useAppStore } from "../stores/appStore";
 
 type SeriesTimelineScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -64,7 +67,7 @@ const getFeedbackDisplay = (rating: FeedbackRating): { emoji: string; label: str
 // Memoized Session Card Component
 const SessionCard = React.memo<{
   item: SessionWithReflection;
-  onPress: (sessionId: string) => void;
+  onPress: (session: SessionWithReflection) => void;
 }>(({ item, onPress }) => {
   // Calculate duration if session ended
   const durationMinutes = item.ended_at
@@ -103,7 +106,7 @@ const SessionCard = React.memo<{
   return (
     <TouchableOpacity
       style={styles.sessionCard}
-      onPress={() => onPress(item.id)}
+      onPress={() => onPress(item)}
       activeOpacity={0.7}
     >
       {/* Date/Time */}
@@ -168,11 +171,16 @@ const SessionCard = React.memo<{
 
 const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
   const { practiceAreaId, focusSessionId } = route.params;
+  const { setReflectionFormat, clearReflectionDraft, setLastEndedSessionId } = useAppStore();
   
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [sessions, setSessions] = useState<SessionWithReflection[]>([]);
   const [practiceAreaName, setPracticeAreaName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Modal state
+  const [selectedSession, setSelectedSession] = useState<SessionWithReflection | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   // Load practice area name
   useEffect(() => {
@@ -211,10 +219,71 @@ const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
     }, [loadSessions])
   );
 
-  // Handle session card press (stub for future Session Detail modal)
-  const handleSessionPress = (sessionId: string) => {
-    // TODO: Navigate to Session Detail modal
-    console.log('Session pressed:', sessionId);
+  // Handle session card press - open Session Detail modal
+  const handleSessionPress = (session: SessionWithReflection) => {
+    setSelectedSession(session);
+    setIsModalVisible(true);
+  };
+
+  // Close modal
+  const handleCloseModal = () => {
+    setIsModalVisible(false);
+    setSelectedSession(null);
+  };
+
+  // Handle Edit Reflection - navigate to ReflectionPromptsScreen in edit mode
+  const handleEditReflection = (sessionId: string) => {
+    handleCloseModal();
+    // Load the existing reflection format into the store before navigating
+    const session = sessions.find(s => s.id === sessionId);
+    if (session?.format) {
+      setReflectionFormat(session.format);
+    }
+    navigation.navigate("ReflectionPrompts", { sessionId, editMode: true });
+  };
+
+  // Handle Complete Reflection - navigate to ReflectionFormatScreen
+  const handleCompleteReflection = (sessionId: string) => {
+    handleCloseModal();
+    // Clear any existing draft and set the session ID for reflection flow
+    clearReflectionDraft();
+    setLastEndedSessionId(sessionId);
+    navigation.navigate("ReflectionFormat");
+  };
+
+  // Handle Move Session - placeholder for future implementation
+  const handleMoveSession = (sessionId: string) => {
+    // Placeholder - will be implemented in separate ticket
+    Alert.alert(
+      "Coming Soon",
+      "Moving sessions between practice areas will be available in a future update.",
+      [{ text: "OK" }]
+    );
+  };
+
+  // Handle Delete Session
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      const deleted = await deleteSession(sessionId);
+      if (deleted) {
+        // Close modal and refresh list
+        handleCloseModal();
+        loadSessions();
+      } else {
+        Alert.alert(
+          "Cannot Delete",
+          "This session has a reflection and cannot be deleted.",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error) {
+      console.error("Error deleting session:", error);
+      Alert.alert(
+        "Error",
+        "Failed to delete session. Please try again.",
+        [{ text: "OK" }]
+      );
+    }
   };
 
   // Toggle sort order
@@ -256,6 +325,17 @@ const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
             Start a session in {practiceAreaName} to see it here
           </Text>
         </View>
+
+        {/* Session Detail Modal */}
+        <SessionDetailModal
+          visible={isModalVisible}
+          session={selectedSession}
+          onClose={handleCloseModal}
+          onEditReflection={handleEditReflection}
+          onCompleteReflection={handleCompleteReflection}
+          onMoveSession={handleMoveSession}
+          onDeleteSession={handleDeleteSession}
+        />
       </View>
     );
   }
@@ -299,6 +379,17 @@ const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
           contentContainerStyle={styles.listContent}
         />
       )}
+
+      {/* Session Detail Modal */}
+      <SessionDetailModal
+        visible={isModalVisible}
+        session={selectedSession}
+        onClose={handleCloseModal}
+        onEditReflection={handleEditReflection}
+        onCompleteReflection={handleCompleteReflection}
+        onMoveSession={handleMoveSession}
+        onDeleteSession={handleDeleteSession}
+      />
     </View>
   );
 };
