@@ -9,11 +9,13 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import Toast from "react-native-toast-message";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { SessionWithReflection, ReflectionFormat, FeedbackRating } from "../utils/types";
 import { getSessionWithFullReflection, SessionWithFullReflection } from "../db/queries";
 import { getReflectionState, getReflectionBadge, ReflectionState } from "../services/reflectionStateService";
 import { formatDateTime } from "../utils/timeFormatting";
+import PracticeAreaPicker from "./PracticeAreaPicker";
 
 export interface SessionDetailModalProps {
   visible: boolean;
@@ -21,7 +23,7 @@ export interface SessionDetailModalProps {
   onClose: () => void;
   onEditReflection: (sessionId: string) => void;
   onCompleteReflection: (sessionId: string) => void;
-  onMoveSession: (sessionId: string) => void;
+  onMoveSession: (sessionId: string, newPracticeAreaId: string) => void;
   onDeleteSession: (sessionId: string) => void;
 }
 
@@ -43,7 +45,7 @@ const getFormatLabel = (format: ReflectionFormat | null): string | null => {
 // Get feedback emoji and label
 const getFeedbackDisplay = (rating: FeedbackRating): { emoji: string; label: string } | null => {
   if (rating === null) return null;
-  
+
   const displays = {
     0: { emoji: "😕", label: "Confusing" },
     1: { emoji: "😞", label: "Hard" },
@@ -51,7 +53,7 @@ const getFeedbackDisplay = (rating: FeedbackRating): { emoji: string; label: str
     3: { emoji: "🙂", label: "Good" },
     4: { emoji: "🚀", label: "Great" },
   };
-  
+
   return displays[rating] || null;
 };
 
@@ -80,6 +82,7 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
 }) => {
   const [fullSession, setFullSession] = useState<SessionWithFullReflection | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   // Load full session data when modal opens
   useEffect(() => {
@@ -144,11 +147,11 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
   const handleDelete = () => {
     Alert.alert(
       "Delete Session",
-      "Are you sure you want to delete this session? This cannot be undone.",
+      "Delete Session? This will remove the session from your Series. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
+        {
+          text: "Delete",
           style: "destructive",
           onPress: () => {
             onDeleteSession(session.id);
@@ -158,13 +161,16 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
     );
   };
 
-  // Handle move session placeholder
+  // Handle move session - show picker
   const handleMove = () => {
-    Alert.alert(
-      "Coming Soon",
-      "Moving sessions between practice areas will be available in a future update.",
-      [{ text: "OK" }]
-    );
+    setIsPickerVisible(true);
+  };
+
+  // Handle practice area selection
+  const handlePracticeAreaSelect = (practiceAreaId: string) => {
+    if (session) {
+      onMoveSession(session.id, practiceAreaId);
+    }
   };
 
   return (
@@ -191,7 +197,7 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
             </View>
           </View>
 
-          <ScrollView 
+          <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={true}
@@ -199,7 +205,7 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
             {/* Session Info Section */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Session</Text>
-              
+
               <Text style={styles.label}>Intent</Text>
               <Text style={styles.intentText}>{session.intent}</Text>
 
@@ -406,6 +412,16 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
           </View>
         </View>
       </View>
+
+      {/* Practice Area Picker Modal */}
+      {session && (
+        <PracticeAreaPicker
+          visible={isPickerVisible}
+          currentPracticeAreaId={session.practice_area_id}
+          onSelect={handlePracticeAreaSelect}
+          onClose={() => setIsPickerVisible(false)}
+        />
+      )}
     </Modal>
   );
 };

@@ -700,3 +700,32 @@ export async function getSessionWithFullReflection(
   return result as SessionWithFullReflection | null;
 }
 
+/**
+ * Move a session to a different Practice Area
+ * Updates the session's practice_area_id and links it to the last session in the target Practice Area
+ * @param sessionId - The ID of the session to move
+ * @param newPracticeAreaId - The ID of the target Practice Area
+ */
+export async function moveSessionToPracticeArea(
+  sessionId: string,
+  newPracticeAreaId: string
+): Promise<void> {
+  const db = getDatabase();
+  
+  // Find last session in target Practice Area for chain linking
+  const lastInNewPA = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM sessions
+     WHERE practice_area_id = ? AND is_deleted = 0
+     ORDER BY started_at DESC
+     LIMIT 1`,
+    [newPracticeAreaId]
+  );
+
+  await db.runAsync(
+    `UPDATE sessions
+     SET practice_area_id = ?, previous_session_id = ?
+     WHERE id = ?`,
+    [newPracticeAreaId, lastInNewPA?.id ?? null, sessionId]
+  );
+}
+
