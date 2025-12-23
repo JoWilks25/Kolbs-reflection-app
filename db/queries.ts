@@ -467,7 +467,7 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
  */
 export async function createSession(session: Omit<Session, 'is_deleted'>): Promise<Session> {
   const db = getDatabase();
-  
+
   await db.runAsync(
     `INSERT INTO sessions (id, practice_area_id, previous_session_id, intent, target_duration_seconds, started_at, ended_at, is_deleted)
      VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -586,11 +586,11 @@ export async function updateReflection(
   }
 ): Promise<void> {
   const db = getDatabase();
-  
+
   // Build dynamic update query based on provided fields
   const updateFields: string[] = [];
   const values: any[] = [];
-  
+
   if (updates.format !== undefined) {
     updateFields.push('format = ?');
     values.push(updates.format);
@@ -615,14 +615,14 @@ export async function updateReflection(
     updateFields.push('feedback_note = ?');
     values.push(updates.feedback_note);
   }
-  
+
   // Always update updated_at
   updateFields.push('updated_at = ?');
   values.push(updates.updated_at);
-  
+
   // Add sessionId for WHERE clause
   values.push(sessionId);
-  
+
   await db.runAsync(
     `UPDATE reflections SET ${updateFields.join(', ')} WHERE session_id = ?`,
     values
@@ -636,12 +636,12 @@ export async function updateReflection(
  * @returns Array of sessions with reflection data
  */
 export async function getSeriesSessions(
-  practiceAreaId: string, 
+  practiceAreaId: string,
   sortOrder: 'asc' | 'desc' = 'desc'
 ): Promise<SessionWithReflection[]> {
   const db = getDatabase();
   const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
-  
+
   const results = await db.getAllAsync<any>(
     `SELECT s.*, 
             r.format, 
@@ -655,7 +655,7 @@ export async function getSeriesSessions(
      ORDER BY s.started_at ${order}`,
     [practiceAreaId]
   );
-  
+
   return results as SessionWithReflection[];
 }
 
@@ -679,7 +679,7 @@ export async function getSessionWithFullReflection(
   sessionId: string
 ): Promise<SessionWithFullReflection | null> {
   const db = getDatabase();
-  
+
   const result = await db.getFirstAsync<any>(
     `SELECT s.*, 
             r.format, 
@@ -696,7 +696,7 @@ export async function getSessionWithFullReflection(
        AND s.is_deleted = 0`,
     [sessionId]
   );
-  
+
   return result as SessionWithFullReflection | null;
 }
 
@@ -711,7 +711,7 @@ export async function moveSessionToPracticeArea(
   newPracticeAreaId: string
 ): Promise<void> {
   const db = getDatabase();
-  
+
   // Find last session in target Practice Area for chain linking
   const lastInNewPA = await db.getFirstAsync<{ id: string }>(
     `SELECT id FROM sessions
@@ -727,5 +727,73 @@ export async function moveSessionToPracticeArea(
      WHERE id = ?`,
     [newPracticeAreaId, lastInNewPA?.id ?? null, sessionId]
   );
+}
+
+/**
+ * Get previous intent with context for edge case handling
+ * Returns human-readable messages for all edge cases:
+ * - First session in Practice Area
+ * - Previous session not found (broken chain)
+ * - Previous session deleted
+ * - Previous session moved to different Practice Area
+ * - Actual step4_answer or "No previous intent recorded"
+ * @param session - The current session to get previous intent for
+ * @returns Human-readable string describing previous intent or edge case
+ */
+export async function getPreviousIntentWithContext(
+  session: Session
+): Promise<string> {
+  const db = getDatabase();
+
+  if (!session.previous_session_id) {
+    return 'First session in this Practice Area';
+  }
+
+  const prev = await db.getFirstAsync<{
+    id: string;
+    practice_area_id: string;
+    is_deleted: number;
+    step4_answer: string | null;
+  }>(
+    `SELECT s.id, s.practice_area_id, s.is_deleted, r.step4_answer
+     FROM sessions s
+     LEFT JOIN reflections r ON r.session_id = s.id
+     WHERE s.id = ?`,
+    [session.previous_session_id]
+  );
+
+  if (!prev) return 'Previous session not found';
+  if (prev.is_deleted === 1) return 'Previous session deleted';
+  if (prev.practice_area_id !== session.practice_area_id) {
+    return 'Previous session moved to different Practice Area';
+  }
+  return prev.step4_answer || 'No previous intent recorded';
+}
+
+/**
+ * Get any session blocking new session creation in a Practice Area
+ * Returns the most recent ended session that has no reflection and is not deleted.
+ * Unlike checkLastSessionHasPendingReflection, this has NO time window - 
+ * blocks indefinitely until reflection is completed or session is deleted.
+ * @param practiceAreaId - The ID of the practice area to check
+ * @returns The blocking session, or null if none exists
+ */
+export async function getBlockingUnreflectedSession(
+  practiceAreaId: string
+): Promise<Session | null> {
+  const db = getDatabase();
+  const result = await db.getFirstAsync<Session>(
+    `SELECT s.*
+     FROM sessions s
+     LEFT JOIN reflections r ON r.session_id = s.id
+     WHERE s.practice_area_id = ?
+       AND s.is_deleted = 0
+       AND s.ended_at IS NOT NULL
+       AND r.id IS NULL
+     ORDER BY s.ended_at DESC
+     LIMIT 1`,
+    [practiceAreaId]
+  );
+  return result || null;
 }
 

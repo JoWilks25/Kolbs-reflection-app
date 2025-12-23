@@ -15,7 +15,7 @@ import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
 import { PracticeAreaWithStats, PendingReflection } from '../utils/types';
-import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestData } from "../db/queries";
+import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestData, getBlockingUnreflectedSession } from "../db/queries";
 import { getDatabase } from "../db/migrations";
 import PendingReflectionsBanner from "../components/PendingReflectionsBanner";
 import PracticeAreaItem from "../components/PracticeAreaItem";
@@ -134,8 +134,28 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  // Navigation handler
-  const handlePracticeAreaPress = (practiceAreaId: string) => {
+  // Navigation handler with guard for unreflected sessions
+  const handlePracticeAreaPress = async (practiceAreaId: string) => {
+    const blockingSession = await getBlockingUnreflectedSession(practiceAreaId);
+
+    if (blockingSession) {
+      Alert.alert(
+        'Reflection Pending',
+        'You have a pending reflection for your last session. Please complete it or delete the session before starting a new one.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Go to Timeline',
+            onPress: () => navigation.navigate('SeriesTimeline', {
+              practiceAreaId,
+              focusSessionId: blockingSession.id,
+            }),
+          },
+        ]
+      );
+      return;
+    }
+
     navigation.navigate("SessionSetup", { practiceAreaId });
   };
 
