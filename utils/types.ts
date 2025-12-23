@@ -155,6 +155,7 @@ export interface AppActions {
   startSession: (session: Session, targetDuration?: number | null) => void;
   updateTimer: () => void;
   endSession: () => void;
+  setLastEndedSessionId: (sessionId: string | null) => void;
   clearLastEndedSession: () => void;
 
   // Reflection draft actions
