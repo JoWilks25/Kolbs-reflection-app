@@ -121,6 +121,10 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.md,
     padding: SPACING.xs,
   },
+  backButtonIcon: {
+    fontSize: 24,
+    color: COLORS.primary,
+  },
   backButtonText: {
     fontSize: TYPOGRAPHY.fontSize.md,
     color: COLORS.primary, // or COLORS.text.primary, depending on your theme

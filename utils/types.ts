@@ -53,6 +53,17 @@ export interface PendingReflection extends Session {
 }
 
 /**
+ * Session with joined reflection data - Used for Series Timeline view
+ * Extends Session with reflection fields from LEFT JOIN
+ */
+export interface SessionWithReflection extends Session {
+  format: ReflectionFormat | null;
+  feedback_rating: FeedbackRating | null;
+  reflection_updated_at: number | null;
+  reflection_completed_at: number | null;
+}
+
+/**
  * Reflection - A completed reflection for a session
  */
 export interface Reflection {
