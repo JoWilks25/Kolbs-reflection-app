@@ -12,9 +12,10 @@ const formatSessionCount = (count: number): string => {
 export interface PracticeAreaItemProps {
   item: PracticeAreaWithStats;
   onPress: (practiceAreaId: string) => void;
+  onViewTimeline: (practiceAreaId: string) => void;
 }
 
-const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress }) => {
+const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress, onViewTimeline }) => {
   const lastSessionText = item.lastSessionDate
     ? formatDate(item.lastSessionDate)
     : "No sessions yet";
@@ -63,6 +64,23 @@ const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress }) =>
           <Text style={styles.sessionCountText}>
             {formatSessionCount(item.sessionCount)}
           </Text>
+        </View>
+
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => onPress(item.id)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.primaryButtonText}>Start session</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => onViewTimeline(item.id)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.secondaryButtonText}>View timeline</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
@@ -152,6 +170,37 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.xs,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
     color: COLORS.text.inverse,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.sm,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    paddingVertical: SPACING.sm,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.neutral[300],
+  },
+  secondaryButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: COLORS.text.primary,
   },
 });
 
