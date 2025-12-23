@@ -148,7 +148,9 @@ const ReflectionPromptsScreen: React.FC = () => {
 
   // Guard: Redirect if no format selected (skip in edit mode, we'll load it)
   useEffect(() => {
-    if (isEditMode) return; // Skip format check in edit mode
+    if (isEditMode) {
+      return; // Skip format check in edit mode
+    }
 
     if (!reflectionDraft.format) {
       Alert.alert(
@@ -275,6 +277,101 @@ const ReflectionPromptsScreen: React.FC = () => {
     loadSessionData();
   }, [lastEndedSessionId, reflectionDraft.format, navigation, isEditMode, route.params?.sessionId]);
 
+  // Separate useEffect for edit mode to handle loading
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    const sessionId = route.params?.sessionId;
+    if (!sessionId) {
+      Alert.alert("Error", "No session ID provided for editing.", [
+        { text: "OK", onPress: () => navigation.navigate("Home") },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
+    const loadEditModeData = async () => {
+      try {
+        const session = await getSessionById(sessionId);
+        if (!session) {
+          Alert.alert("Error", "Session not found.", [
+            { text: "OK", onPress: () => navigation.navigate("Home") },
+          ]);
+          return;
+        }
+
+        setCurrentSessionId(sessionId);
+
+        const practiceArea = await getPracticeAreaById(session.practice_area_id);
+        if (practiceArea) {
+          setPracticeAreaName(practiceArea.name);
+        }
+        setSessionIntent(session.intent);
+
+        // Edit mode: Priority 1 - Check DB reflection first
+        const reflection = await getReflectionBySessionId(sessionId);
+        const draft = await loadDraftFromStorage(sessionId);
+
+        if (reflection) {
+          // DB reflection exists - check if all fields are filled
+          const dbStep2 = reflection.step2_answer?.trim() || "";
+          const dbStep3 = reflection.step3_answer?.trim() || "";
+          const dbStep4 = reflection.step4_answer?.trim() || "";
+          const allFieldsFilled = dbStep2 && dbStep3 && dbStep4;
+
+          if (allFieldsFilled) {
+            // All fields filled in DB - use DB only (ignore draft)
+            setReflectionFormat(reflection.format);
+            updateReflectionDraft("step2", dbStep2);
+            updateReflectionDraft("step3", dbStep3);
+            updateReflectionDraft("step4", dbStep4);
+            setDraftFields(new Set()); // No draft fields used
+          } else {
+            // Some fields empty - use DB for filled, draft for empty
+            setReflectionFormat(reflection.format);
+
+            // Track which fields came from draft
+            const draftFieldsSet: Set<string> = new Set();
+
+            const step2Value = dbStep2 || draft?.step2 || "";
+            const step3Value = dbStep3 || draft?.step3 || "";
+            const step4Value = dbStep4 || draft?.step4 || "";
+
+            updateReflectionDraft("step2", step2Value);
+            if (!dbStep2 && draft?.step2) draftFieldsSet.add("step2");
+
+            updateReflectionDraft("step3", step3Value);
+            if (!dbStep3 && draft?.step3) draftFieldsSet.add("step3");
+
+            updateReflectionDraft("step4", step4Value);
+            if (!dbStep4 && draft?.step4) draftFieldsSet.add("step4");
+
+            // Store draft fields for indicator display
+            setDraftFields(draftFieldsSet);
+          }
+        } else if (draft) {
+          // No DB reflection - use draft
+          if (draft.format) setReflectionFormat(draft.format);
+          if (draft.step2) updateReflectionDraft("step2", draft.step2);
+          if (draft.step3) updateReflectionDraft("step3", draft.step3);
+          if (draft.step4) updateReflectionDraft("step4", draft.step4);
+
+          // All fields from draft
+          setDraftFields(new Set(["step2", "step3", "step4"]));
+        }
+      } catch (error) {
+        console.error("Error loading session data:", error);
+        Alert.alert("Error", "Failed to load session data.", [
+          { text: "OK", onPress: () => navigation.navigate("Home") },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadEditModeData();
+  }, [isEditMode, route.params?.sessionId, navigation]);
+
   // Auto-focus input when step changes
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -363,7 +460,7 @@ const ReflectionPromptsScreen: React.FC = () => {
 
   const handleComplete = () => {
     if (canComplete) {
-      navigation.navigate("ReflectionFeedback");
+      navigation.navigate("ReflectionFeedback", { sessionId: currentSessionId || undefined });
     }
   };
 
