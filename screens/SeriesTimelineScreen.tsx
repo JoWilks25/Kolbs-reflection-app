@@ -8,12 +8,13 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import Toast from "react-native-toast-message";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { SessionWithReflection, ReflectionFormat, FeedbackRating } from "../utils/types";
-import { getSeriesSessions, getPracticeAreaById, deleteSession } from "../db/queries";
+import { getSeriesSessions, getPracticeAreaById, deleteSession, moveSessionToPracticeArea } from "../db/queries";
 import { getReflectionState, getReflectionBadge } from "../services/reflectionStateService";
 import { formatDateTime } from "../utils/timeFormatting";
 import SessionDetailModal from "../components/SessionDetailModal";
@@ -251,14 +252,29 @@ const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
     navigation.navigate("ReflectionFormat");
   };
 
-  // Handle Move Session - placeholder for future implementation
-  const handleMoveSession = (sessionId: string) => {
-    // Placeholder - will be implemented in separate ticket
-    Alert.alert(
-      "Coming Soon",
-      "Moving sessions between practice areas will be available in a future update.",
-      [{ text: "OK" }]
-    );
+  // Handle Move Session
+  const handleMoveSession = async (sessionId: string, newPracticeAreaId: string) => {
+    try {
+      await moveSessionToPracticeArea(sessionId, newPracticeAreaId);
+      // Close modal and refresh list
+      handleCloseModal();
+      loadSessions();
+      Toast.show({
+        type: "success",
+        text1: "Session moved successfully",
+        position: "bottom",
+        visibilityTime: 2000,
+      });
+    } catch (error) {
+      console.error("Error moving session:", error);
+      Toast.show({
+        type: "error",
+        text1: "Failed to move session",
+        text2: "Please try again.",
+        position: "bottom",
+        visibilityTime: 3000,
+      });
+    }
   };
 
   // Handle Delete Session
@@ -269,20 +285,29 @@ const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
         // Close modal and refresh list
         handleCloseModal();
         loadSessions();
+        Toast.show({
+          type: "success",
+          text1: "Session deleted",
+          position: "bottom",
+          visibilityTime: 2000,
+        });
       } else {
-        Alert.alert(
-          "Cannot Delete",
-          "This session has a reflection and cannot be deleted.",
-          [{ text: "OK" }]
-        );
+        Toast.show({
+          type: "error",
+          text1: "Cannot delete sessions with completed reflections.",
+          position: "bottom",
+          visibilityTime: 3000,
+        });
       }
     } catch (error) {
       console.error("Error deleting session:", error);
-      Alert.alert(
-        "Error",
-        "Failed to delete session. Please try again.",
-        [{ text: "OK" }]
-      );
+      Toast.show({
+        type: "error",
+        text1: "Failed to delete session",
+        text2: "Please try again.",
+        position: "bottom",
+        visibilityTime: 3000,
+      });
     }
   };
 
