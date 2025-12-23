@@ -139,6 +139,10 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     navigation.navigate("SessionSetup", { practiceAreaId });
   };
 
+  const handleViewTimeline = (practiceAreaId: string) => {
+    navigation.navigate("SeriesTimeline", { practiceAreaId });
+  };
+
   // Handle pending reflection banner press
   const handlePendingBannerPress = () => {
     if (pendingReflections.length > 0) {
@@ -212,7 +216,11 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       <FlatList
         data={practiceAreas}
         renderItem={({ item }) => (
-          <PracticeAreaItem item={item} onPress={handlePracticeAreaPress} />
+          <PracticeAreaItem
+            item={item}
+            onPress={handlePracticeAreaPress}
+            onViewTimeline={handleViewTimeline}
+          />
         )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={

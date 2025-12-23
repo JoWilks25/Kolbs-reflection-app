@@ -1,0 +1,446 @@
+Title,Description,EstimateHours,Priority
+"SeriesTimelineScreen: List View, Cards & Sorting","**Goal**
+Build the SeriesTimelineScreen list view for a single Practice Area, showing sessions with rich state, intent preview, and a date sort toggle (newest-first by default).
+
+## Implementation Overview
+- Create the reflection state service (prerequisite for badges).
+- Display all non-deleted sessions for the current Practice Area in a FlatList.
+- Default ordering: newest sessions at the top (ORDER BY started_at DESC).
+- Allow user to toggle sort order between newest-first and oldest-first.
+- Show key session details on each card: date, intent, duration/target, format, reflection status, feedback, edited state.
+
+## Implementation Steps
+
+### 1. Reflection State Service (Prerequisite)
+- Create `services/reflectionStateService.ts` with state calculation logic per tech spec section 7.1:
+  ```typescript
+  // services/reflectionStateService.ts
+  import { Session, Reflection } from '../utils/types';
+
+  export type ReflectionState = 
+    | { status: 'completed'; canEdit: boolean; isEdited: boolean }
+    | { status: 'pending'; hoursRemaining: number }
+    | { status: 'overdue'; hoursUntilExpiry: number }
+    | { status: 'expired'; canStillReflect: true };
+
+  export const getReflectionState = (
+    session: Session, 
+    reflection?: Reflection
+  ): ReflectionState => {
+    // Has reflection
+    if (reflection) {
+      const hoursSinceEnd = (Date.now() - (session.ended_at || 0)) / (1000 * 60 * 60);
+      const canEdit = hoursSinceEnd <= 48;
+      const isEdited = Boolean(reflection.updated_at && reflection.updated_at > reflection.completed_at);
+      
+      return { status: 'completed', canEdit, isEdited };
+    }
+    
+    // No reflection - calculate deadline state
+    const hoursSinceEnd = (Date.now() - (session.ended_at || 0)) / (1000 * 60 * 60);
+    
+    if (hoursSinceEnd <= 24) {
+      return { status: 'pending', hoursRemaining: Math.ceil(24 - hoursSinceEnd) };
+    }
+    
+    if (hoursSinceEnd <= 48) {
+      return { status: 'overdue', hoursUntilExpiry: Math.ceil(48 - hoursSinceEnd) };
+    }
+    
+    return { status: 'expired', canStillReflect: true };
+  };
+
+  export const getReflectionBadge = (state: ReflectionState): { 
+    emoji: string; label: string; color: string 
+  } => {
+    switch (state.status) {
+      case 'completed':
+        return { 
+          emoji: '✅', 
+          label: state.isEdited ? 'Completed (Edited)' : 'Completed',
+          color: '#4CAF50' 
+        };
+      case 'pending':
+        return { 
+          emoji: '🟡', 
+          label: `Due in ${state.hoursRemaining}h`,
+          color: '#FFC107' 
+        };
+      case 'overdue':
+        return { 
+          emoji: '🟠', 
+          label: `Overdue (${state.hoursUntilExpiry}h left)`,
+          color: '#FF9800' 
+        };
+      case 'expired':
+        return { 
+          emoji: '🔴', 
+          label: 'Expired',
+          color: '#F44336' 
+        };
+    }
+  };
+  ```
+
+### 2. Data Query Helper
+- In `db/queries.ts`, add a helper to load sessions with joined reflections for a Practice Area:
+  ```typescript
+  export const getSeriesSessions = async (
+    practiceAreaId: string, 
+    sortOrder: 'asc' | 'desc' = 'desc'
+  ) => {
+    const db = getDatabase();
+    const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
+    return db.getAllAsync(
+      `SELECT s.*, r.format, r.feedback_rating, r.updated_at as reflection_updated_at,
+              r.completed_at as reflection_completed_at
+       FROM sessions s
+       LEFT JOIN reflections r ON r.session_id = s.id
+       WHERE s.practice_area_id = ?
+         AND s.is_deleted = 0
+       ORDER BY s.started_at ${order}`,
+      [practiceAreaId]
+    );
+  };
+  ```
+
+### 3. Screen Layout
+- In `screens/SeriesTimelineScreen.tsx`:
+  - Get `practiceAreaId` from route params.
+  - Local state:
+    ```typescript
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [sessions, setSessions] = useState<SeriesSessionWithReflection[]>([]);
+    ```
+  - On mount and when `sortOrder` changes, load sessions via `getSeriesSessions(practiceAreaId, sortOrder)`.
+
+### 4. Sort Toggle UI
+- Add a small control at the top of the screen, e.g. a pill or segmented control:
+  - Label: ""Sort by date"" with two options: **Newest first** / **Oldest first**.
+  - Tapping toggles `sortOrder` between `'desc'` and `'asc'` and re-queries data.
+
+### 5. Session Card Content
+- Each FlatList item shows:
+  - **Datetime**: formatted `started_at` (e.g., ""Dec 22, 10:30 AM"").
+  - **Intent**: `session.intent`, truncated to 1–2 lines with ellipsis.
+    ```tsx
+    <Text numberOfLines={2} ellipsizeMode=""tail"">{session.intent}</Text>
+    ```
+  - **Duration badge** (if session ended): actual minutes `(ended_at - started_at) / 60_000`.
+  - **Target badge** if `target_duration_seconds` set:
+    - Show actual vs target (e.g., ""32 min • target 30 min"") and an icon indicating met/missed.
+  - **Format badge**: D / R / M when a reflection exists (mapping `format` 1/2/3).
+  - **Reflection state badge** using `getReflectionState` and `getReflectionBadge` (Completed / Pending / Overdue / Expired).
+  - **Feedback emoji** if `feedback_rating` is not null.
+  - **Edited badge** if reflection has `updated_at` set.
+
+### 6. Interaction
+- Tapping a card opens the Session Detail modal (handled in a separate ticket).
+- Ensure scroll performance is acceptable with `keyExtractor={item => item.id}` and memoized row component.
+
+## Files Created / Modified
+- **Created:**
+  - `services/reflectionStateService.ts` – state calculation and badge helpers.
+  - `screens/SeriesTimelineScreen.tsx` – main list view (replacing stub).
+- **Modified:**
+  - `db/queries.ts` – add `getSeriesSessions` helper.
+  - `navigation/RootStackNavigator.tsx` – route already exists, no changes needed.
+
+## Acceptance Criteria
+✓ `reflectionStateService.ts` is created with `getReflectionState()` and `getReflectionBadge()` functions.
+✓ SeriesTimelineScreen loads sessions for the selected Practice Area only.
+✓ Sessions are shown newest-first by default (most recent at top).
+✓ User can toggle sort order to oldest-first, and list updates accordingly.
+✓ Each card shows datetime, truncated intent, duration, target info (when applicable), format badge, reflection state badge, feedback emoji, and edited badge.
+✓ Tapping a card opens the Session Detail modal.
+✓ Soft-deleted sessions do not appear in the list.
+
+## Estimate
+**5 hours** (includes 1 hour for reflection state service)
+",5,High
+SeriesTimelineScreen: Session Detail Modal (3 Variants),"**Goal**
+Implement a Session Detail modal opened from the Series Timeline that adapts its UI based on reflection state (completed & editable, completed & locked, no reflection yet).
+
+## Implementation Overview
+- Show full session details and reflection content in a modal.
+- Use reflection state service (created in Ticket 1) to decide which actions and badges to show.
+- Provide entry points for editing reflection, completing reflection, moving or deleting sessions.
+
+## Implementation Steps
+
+### 1. Modal Trigger
+- In SeriesTimelineScreen, on card press: set `selectedSession` and open modal.
+  ```typescript
+  const [selectedSession, setSelectedSession] = useState<SeriesSessionWithReflection | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  const handlePressSession = (session) => {
+    setSelectedSession(session);
+    setIsModalVisible(true);
+  };
+  ```
+
+### 2. Determine Reflection State
+- Use `getReflectionState(session, reflection?)` from `services/reflectionStateService` to compute:
+  - `status`: 'completed' | 'pending' | 'overdue' | 'expired'.
+  - `canEdit`, `isEdited`, or `hoursRemaining`, `hoursUntilExpiry`, etc.
+- Use `getReflectionBadge(state)` to get label/color/emoji for the badge.
+
+### 3. Modal Variants
+
+#### a) Reflection completed & editable (within 48h)
+- Show:
+  - Intent, start/end time, actual duration, target info.
+  - Reflection format, completed timestamp, edited timestamp (if any).
+  - Full text for step2_answer/step3_answer/step4_answer.
+  - Feedback rating and note (if present).
+- Actions:
+  - **Edit Reflection** → navigate to ReflectionPromptsScreen in edit mode.
+  - **Move to Different Practice Area** → handled by Move Session ticket.
+  - **Close**.
+
+#### b) Reflection completed & locked (after 48h)
+- Same detail layout, but:
+  - No **Edit Reflection** button (respect 48h edit window).
+- Actions:
+  - **Move to Different Practice Area**.
+  - **Close**.
+
+#### c) No reflection yet (pending/overdue/expired)
+- Show:
+  - Intent, start/end time, actual duration, target info.
+  - Status line, e.g., ""Pending – due in 6h"", ""Overdue – expires in 18h"", or ""Expired"".
+- Actions:
+  - **Complete Reflection** → navigate to ReflectionFormatScreen/Prompts for this session.
+  - **Move to Different Practice Area**.
+  - **Delete Session** (only if no reflection exists).
+  - **Close**.
+
+### 4. Navigation Hooks
+- Edit Reflection:
+  - Navigate to ReflectionPromptsScreen with params `{ sessionId, editMode: true }`.
+- Complete Reflection:
+  - Navigate to ReflectionFormatScreen with `{ sessionId }`, then Prompts.
+
+### 5. UI Details
+- Use a scrollable modal for long reflections.
+- Reuse badge styles from timeline cards for consistency.
+
+## Files Created / Modified
+- **Created:**
+  - `components/SessionDetailModal.tsx` (optional extraction) or inline in SeriesTimelineScreen.
+- **Modified:**
+  - `screens/SeriesTimelineScreen.tsx` – add modal management and navigation hooks.
+
+## Acceptance Criteria
+✓ Tapping a timeline card opens a detail modal for that session.
+✓ Completed reflections within 48h show an Edit button; after 48h they do not.
+✓ Sessions without reflections show a clear Pending/Overdue/Expired state message.
+✓ From the modal, user can start reflection, edit reflection (when allowed), move session, or delete session (no reflection only).
+✓ Modal layout handles long reflection text via scrolling.
+
+## Estimate
+**5 hours**
+",5,High
+SeriesTimelineScreen: Move & Delete Session Logic,"**Goal**
+Add backend logic and UI hooks to move sessions between Practice Areas and soft-delete sessions that have no reflection, from the Series Timeline / Session Detail modal.
+
+## Implementation Overview
+- Move sessions to a different Practice Area while preserving reflection linkage and sequential chain.
+- Delete sessions (soft-delete) only when they have no reflection.
+- Integrate with existing timeline and modal actions.
+
+## Note on Existing Code
+- **Delete logic already exists**: `deleteSession()` in `db/queries.ts` already implements soft-delete with reflection check. This ticket adds the Move logic and wires both to the UI.
+
+## Implementation Steps
+
+### 1. Move Session Logic
+- In `db/queries.ts`, add helper:
+  ```typescript
+  export const moveSessionToPracticeArea = async (
+    sessionId: string,
+    newPracticeAreaId: string
+  ) => {
+    const db = getDatabase();
+    
+    // Find last session in target Practice Area for chain linking
+    const lastInNewPA = await db.getFirstAsync<{ id: string }>(
+      `SELECT id FROM sessions
+       WHERE practice_area_id = ? AND is_deleted = 0
+       ORDER BY started_at DESC
+       LIMIT 1`,
+      [newPracticeAreaId]
+    );
+
+    await db.runAsync(
+      `UPDATE sessions
+       SET practice_area_id = ?, previous_session_id = ?
+       WHERE id = ?`,
+      [newPracticeAreaId, lastInNewPA?.id ?? null, sessionId]
+    );
+  };
+  ```
+- From Session Detail modal:
+  - Show ""Move to Different Practice Area"" action.
+  - Open a simple selector of existing Practice Areas (reuse practice area list from store).
+  - On confirm, call `moveSessionToPracticeArea`, then reload timeline and show success toast.
+
+### 2. Delete Session Integration
+- Use existing `deleteSession(sessionId)` from `db/queries.ts`:
+  ```typescript
+  // Already exists - returns true if deleted, false if has reflection
+  export async function deleteSession(sessionId: string): Promise<boolean>
+  ```
+- In Session Detail modal, for sessions without reflection:
+  - Show ""Delete Session"" action.
+  - On press, show confirmation Alert: ""Delete Session? This will remove the session from your Series. This cannot be undone."".
+  - Call `deleteSession(sessionId)`.
+  - If returns false, show message: ""Cannot delete sessions with completed reflections."".
+  - Reload timeline after successful delete.
+
+### 3. Practice Area Picker Component
+- Create simple picker modal/sheet showing list of Practice Areas (excluding current).
+- On selection, confirm and execute move.
+
+### 4. UX Integration
+- Ensure Move/Delete actions close the modal and refresh the Series list.
+- Show appropriate toasts/snackbars on success/failure.
+
+## Files Created / Modified
+- **Created:**
+  - `components/PracticeAreaPicker.tsx` – simple picker for move destination.
+- **Modified:**
+  - `db/queries.ts` – add `moveSessionToPracticeArea` (delete already exists).
+  - `screens/SeriesTimelineScreen.tsx` – wire Move/Delete from modal actions.
+
+## Acceptance Criteria
+✓ User can move a session (with or without reflection) to another Practice Area.
+✓ After moving, session appears in the target Practice Area's timeline with correct ordering and chain.
+✓ Reflections remain correctly linked via `session_id` when moving sessions.
+✓ User can delete a session only if it has no reflection (using existing `deleteSession()`).
+✓ Attempting to delete a session with reflection shows a clear error and does nothing.
+✓ After delete, session is removed from the timeline (soft-delete via `is_deleted = 1`).
+
+## Estimate
+**3 hours**
+",3,High
+Previous Intent Helper & New Session Guard,"**Goal**
+Extend previous intent resolution to handle edge cases gracefully, and enforce a guard that prevents starting a new session in a Practice Area until the last one has a reflection or has been deleted.
+
+## Implementation Overview
+- Extend the existing `getPreviousSessionIntent` to handle broken `previous_session_id` chains for display.
+- Block new session creation when the last ended session in a Practice Area does not yet have a reflection and is not deleted.
+
+## Note on Existing Code
+- **Similar functions exist** in `db/queries.ts`:
+  - `getPreviousSessionIntent(practiceAreaId)` – gets most recent session's step4_answer
+  - `checkLastSessionHasPendingReflection(practiceAreaId)` – checks if last session needs reflection
+- This ticket extends these with edge case handling and enforces the guard in navigation.
+
+## Implementation Steps
+
+### 1. Enhanced Previous Intent Helper
+- In `db/queries.ts`, add a more robust helper for edge cases:
+  ```typescript
+  export const getPreviousIntentWithContext = async (
+    session: Session
+  ): Promise<string> => {
+    const db = getDatabase();
+    
+    if (!session.previous_session_id) {
+      return 'First session in this Practice Area';
+    }
+
+    const prev = await db.getFirstAsync<{
+      id: string;
+      practice_area_id: string;
+      is_deleted: number;
+      step4_answer: string | null;
+    }>(
+      `SELECT s.id, s.practice_area_id, s.is_deleted, r.step4_answer
+       FROM sessions s
+       LEFT JOIN reflections r ON r.session_id = s.id
+       WHERE s.id = ?`,
+      [session.previous_session_id]
+    );
+
+    if (!prev) return 'Previous session not found';
+    if (prev.is_deleted === 1) return 'Previous session deleted';
+    if (prev.practice_area_id !== session.practice_area_id) {
+      return 'Previous session moved to different Practice Area';
+    }
+    return prev.step4_answer || 'No previous intent recorded';
+  };
+  ```
+- This helper can be used anywhere previous intent context is needed (e.g., session detail view).
+
+### 2. Guard Query
+- Extend or add to `db/queries.ts`:
+  ```typescript
+  export const getBlockingUnreflectedSession = async (
+    practiceAreaId: string
+  ): Promise<Session | null> => {
+    const db = getDatabase();
+    const result = await db.getFirstAsync<Session>(
+      `SELECT s.*
+       FROM sessions s
+       LEFT JOIN reflections r ON r.session_id = s.id
+       WHERE s.practice_area_id = ?
+         AND s.is_deleted = 0
+         AND s.ended_at IS NOT NULL
+         AND r.id IS NULL
+       ORDER BY s.ended_at DESC
+       LIMIT 1`,
+      [practiceAreaId]
+    );
+    return result || null;
+  };
+  ```
+
+### 3. Enforce Guard in HomeScreen Navigation
+- In `screens/HomeScreen.tsx`, modify `handlePracticeAreaPress`:
+  ```typescript
+  const handlePracticeAreaPress = async (practiceAreaId: string) => {
+    const blockingSession = await getBlockingUnreflectedSession(practiceAreaId);
+    
+    if (blockingSession) {
+      Alert.alert(
+        'Reflection Pending',
+        'You have a pending reflection for your last session. Please complete it or delete the session before starting a new one.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Go to Timeline',
+            onPress: () => navigation.navigate('SeriesTimeline', {
+              practiceAreaId,
+              focusSessionId: blockingSession.id,
+            }),
+          },
+        ]
+      );
+      return;
+    }
+    
+    navigation.navigate('SessionSetup', { practiceAreaId });
+  };
+  ```
+
+### 4. Optional Defensive Check in SessionSetupScreen
+- In `SessionSetupScreen.handleStartSession`, optionally re-check `getBlockingUnreflectedSession` before inserting a new session, to avoid race conditions.
+
+## Files Created / Modified
+- **Modified:**
+  - `db/queries.ts` – add `getPreviousIntentWithContext`, `getBlockingUnreflectedSession`.
+  - `screens/HomeScreen.tsx` – add guard before `SessionSetupScreen` navigation.
+  - `screens/SessionSetupScreen.tsx` – optional defensive guard.
+
+## Acceptance Criteria
+✓ `getPreviousIntentWithContext` returns human-readable messages for all edge cases (first session, missing, deleted, moved, no previous intent).
+✓ User cannot start a new session in a Practice Area if the last ended session has no reflection and is not deleted.
+✓ When blocked, user sees a clear explanation and a path to the Series Timeline.
+✓ Once the user completes a reflection or deletes the session, they can start a new session normally.
+
+## Estimate
+**2 hours**
+",2,High

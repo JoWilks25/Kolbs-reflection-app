@@ -5,7 +5,7 @@
  * Currently empty - ready for future implementation.
  */
 
-import { PracticeAreaWithStats, PracticeArea, Session } from '../utils';
+import { PracticeAreaWithStats, PracticeArea, Session, SessionWithReflection } from '../utils';
 import { getDatabase } from './migrations';
 import { generateId } from '../utils/uuid';
 
@@ -627,5 +627,35 @@ export async function updateReflection(
     `UPDATE reflections SET ${updateFields.join(', ')} WHERE session_id = ?`,
     values
   );
+}
+
+/**
+ * Get all sessions for a Practice Area with joined reflection data
+ * @param practiceAreaId - The ID of the practice area
+ * @param sortOrder - Sort order: 'asc' for oldest first, 'desc' for newest first (default)
+ * @returns Array of sessions with reflection data
+ */
+export async function getSeriesSessions(
+  practiceAreaId: string, 
+  sortOrder: 'asc' | 'desc' = 'desc'
+): Promise<SessionWithReflection[]> {
+  const db = getDatabase();
+  const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
+  
+  const results = await db.getAllAsync<any>(
+    `SELECT s.*, 
+            r.format, 
+            r.feedback_rating, 
+            r.updated_at as reflection_updated_at,
+            r.completed_at as reflection_completed_at
+     FROM sessions s
+     LEFT JOIN reflections r ON r.session_id = s.id
+     WHERE s.practice_area_id = ?
+       AND s.is_deleted = 0
+     ORDER BY s.started_at ${order}`,
+    [practiceAreaId]
+  );
+  
+  return results as SessionWithReflection[];
 }
 
