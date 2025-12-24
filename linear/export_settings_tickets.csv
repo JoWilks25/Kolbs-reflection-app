@@ -1,0 +1,303 @@
+Title,Description,EstimateHours,Priority
+ExportService: JSON Export Builder & Share Sheet,"**Goal**
+Implement a JSON export of all Practice Areas, Sessions, and Reflections (with target duration and edit metadata) and expose it via the iOS share sheet.
+
+## Implementation Overview
+- Build `exportService.exportData()` to construct the JSON according to the spec.
+- Compute derived fields: actual duration, met target, is edited.
+- Write JSON to a file with `expo-file-system`.
+- Share the file with `expo-sharing` (iOS share sheet).
+
+## Implementation Steps
+
+### 1. Define Export Shape
+- In `services/exportService.ts`, define TypeScript types for clarity (optional but recommended):
+  ```typescript
+  export type ExportReflection = {
+    format: number;
+    step2answer: string;
+    step3answer: string;
+    step4answer: string;
+    feedbackrating: number | null;
+    feedbacknote: string | null;
+    completedat: number;
+    updatedat: number | null;
+    isedited: boolean;
+  };
+
+  export type ExportSession = {
+    id: string;
+    previoussessionid: string | null;
+    intent: string;
+    startedat: number;
+    endedat: number | null;
+    targetdurationseconds: number | null;
+    actualdurationseconds: number | null;
+    mettarget: boolean | null;
+    reflection: ExportReflection | null;
+  };
+
+  export type ExportPracticeArea = {
+    id: string;
+    name: string;
+    createdat: number;
+    sessions: ExportSession[];
+  };
+
+  export type ExportPayload = {
+    exportdate: string;
+    practiceareas: ExportPracticeArea[];
+  };
+  ```
+
+### 2. Query Practice Areas
+- Load all non-deleted Practice Areas:
+  ```typescript
+  const practiceAreas = await db.getAllAsync(
+    'SELECT * FROM practiceareas WHERE isdeleted = 0 ORDER BY createdat ASC'
+  );
+  ```
+
+### 3. Query Sessions + Reflections Per Practice Area
+- For each Practice Area, load sessions with joined reflections ordered by `startedat ASC` (per spec):
+  ```typescript
+  const sessions = await db.getAllAsync(
+    `SELECT s.*, r.format, r.step2answer, r.step3answer, r.step4answer,
+            r.feedbackrating, r.feedbacknote, r.completedat, r.updatedat
+     FROM sessions s
+     LEFT JOIN reflections r ON r.sessionid = s.id
+     WHERE s.practiceareaid = ? AND s.isdeleted = 0
+     ORDER BY s.startedat ASC`,
+    [pa.id]
+  );
+  ```
+
+### 4. Compute Derived Fields
+- For each session row:
+  ```typescript
+  const actualDurationSeconds =
+    session.endedat ? Math.floor((session.endedat - session.startedat) / 1000) : null;
+
+  const metTarget = session.targetdurationseconds && actualDurationSeconds != null
+    ? actualDurationSeconds >= session.targetdurationseconds
+    : null;
+
+  const isEdited =
+    session.updatedat && session.completedat
+      ? session.updatedat !== session.completedat
+      : false;
+  ```
+- Map DB rows into `ExportSession` + `ExportReflection` structures.
+
+### 5. Build Export Payload
+- Combine into final payload:
+  ```typescript
+  const payload: ExportPayload = {
+    exportdate: new Date().toISOString(),
+    practiceareas: practiceAreas.map((pa) => ({
+      id: pa.id,
+      name: pa.name,
+      createdat: pa.createdat,
+      sessions: mapSessionsForPracticeArea(pa),
+    })),
+  };
+  ```
+
+### 6. Write to File and Share
+- Use `expo-file-system` to write JSON string to a file:
+  ```typescript
+  import * as FileSystem from 'expo-file-system';
+  import * as Sharing from 'expo-sharing';
+
+  const fileUri = `${FileSystem.documentDirectory}kolbs-export-${Date.now()}.json`;
+  await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(payload, null, 2));
+  ```
+- Use `expo-sharing` to open share sheet:
+  ```typescript
+  await Sharing.shareAsync(fileUri, {
+    mimeType: 'application/json',
+    dialogTitle: 'Export Kolbs Reflection Data',
+  });
+  ```
+
+### 7. Export Function API
+- Provide a simple API for UI layer:
+  ```typescript
+  export const exportData = async () => {
+    // build + write + share, with try/catch and toast on error
+  };
+  ```
+
+## Files Created / Modified
+- **Created:**
+  - `services/exportService.ts` – JSON builder, file writer, share integration.
+- **Modified:**
+  - `db/queries.ts` (optional) – helpers for fetching export data.
+
+## Acceptance Criteria
+✓ Export includes all non-deleted practice areas, sessions, and reflections.
+✓ Each session has `targetdurationseconds`, `actualdurationseconds`, and `mettarget` as per spec.
+✓ Each reflection has `updatedat` and computed `isedited` flag.
+✓ JSON is formatted and valid (parseable).
+✓ Share sheet opens allowing user to save/export the JSON file.
+✓ Errors during export show a user-visible error (toast/alert).
+
+## Estimate
+**5 hours**
+",5,High
+SettingsScreen: Export UI & Privacy Sections,"**Goal**
+Implement the SettingsScreen UI with an export button that calls the export service, plus privacy and about sections.
+
+## Implementation Overview
+- Build SettingsScreen with three main sections: Export Data, Privacy & Security, About.
+- Wire the Export button to `exportService.exportData()`.
+- Display static privacy text and app version.
+
+## Implementation Steps
+
+### 1. Screen Layout
+- In `screens/SettingsScreen.tsx`:
+  - Use a simple ScrollView with vertical sections.
+
+#### Section 1: Export Data
+- Title: ""Export Data"".
+- Description: ""Export all Practice Areas, Sessions, and Reflections as JSON. Use for manual analysis or backup."".
+- Button: ""Export All Data (JSON)"".
+  - On press: call `exportData()` from `exportService`.
+
+#### Section 2: Privacy & Security
+- Static text, per spec:
+  - ""All data is stored locally on your device, encrypted at rest.""
+  - ""No cloud sync or external analytics.""
+
+#### Section 3: About
+- Show app version and optional developer info:
+  - e.g., `Version 1.0.0`.
+  - Optional: ""Built for personal reflection and learning."".
+
+### 2. Hook Up Export Button
+- Import and use the service:
+  ```typescript
+  import { exportData } from '@/services/exportService';
+
+  const handleExportPress = async () => {
+    try {
+      await exportData();
+    } catch (e) {
+      showToast('Failed to export data. Please try again.');
+    }
+  };
+  ```
+
+### 3. App Version
+- Use Expo Constants (or similar) to show version:
+  ```typescript
+  import Constants from 'expo-constants';
+  const version = Constants.expoConfig?.version ?? '1.0.0';
+  ```
+
+### 4. Navigation from HomeScreen
+- In HomeScreen header, ensure Settings icon navigates to SettingsScreen:
+  - Right-top icon button (gear).
+  - `navigation.navigate('Settings');`.
+
+## Files Created / Modified
+- **Created:**
+  - `screens/SettingsScreen.tsx` – main settings UI.
+- **Modified:**
+  - `navigation/RootStackNavigator.tsx` – add Settings route if not already.
+  - `screens/HomeScreen.tsx` – hook up Settings icon to navigate.
+
+## Acceptance Criteria
+✓ SettingsScreen shows Export Data, Privacy & Security, and About sections.
+✓ Tapping Export button triggers JSON export and opens iOS share sheet.
+✓ Privacy text clearly states local-only storage and encryption.
+✓ App version is displayed correctly on the Settings screen.
+✓ Settings icon from HomeScreen navigates to SettingsScreen.
+
+## Estimate
+**2 hours**
+",2,High
+Security: Device Lock Check & Warning Banner,"**Goal**
+Check whether device lock (Face ID/passcode) is enabled and surface a clear privacy warning banner when it is not, plus status in Settings.
+
+## Implementation Overview
+- Use `expo-local-authentication` to detect device lock.
+- Store whether to show a security warning banner in Zustand.
+- Show a dismissible banner on HomeScreen if device lock is not enabled.
+- Optionally show lock status in SettingsScreen.
+
+## Implementation Steps
+
+### 1. Security Service Helper
+- In `services/securityService.ts` (or similar):
+  ```typescript
+  import * as LocalAuthentication from 'expo-local-authentication';
+
+  export const checkDeviceSecurity = async (): Promise<boolean> => {
+    try {
+      const isEnrolled = await LocalAuthentication.hasHardwareAsync()
+        ? await LocalAuthentication.isEnrolledAsync()
+        : false;
+      return isEnrolled;
+    } catch (e) {
+      console.warn('Failed to check device security', e);
+      return false;
+    }
+  };
+  ```
+
+### 2. Zustand UI State
+- Ensure store has:
+  ```typescript
+  showSecurityWarning: boolean;
+  setShowSecurityWarning: (show: boolean) => void;
+  ```
+
+### 3. HomeScreen Warning Banner
+- In `HomeScreen.tsx`:
+  ```typescript
+  const { showSecurityWarning, setShowSecurityWarning } = useAppStore();
+
+  useEffect(() => {
+    checkDeviceSecurity().then((isSecure) => {
+      setShowSecurityWarning(!isSecure);
+    });
+  }, []);
+  ```
+- Render banner when `showSecurityWarning` is true:
+  ```tsx
+  {showSecurityWarning && (
+    <View style={styles.warningBanner}>
+      <Text>Enable device lock (Face ID/passcode) for better privacy.</Text>
+      <TouchableOpacity onPress={() => setShowSecurityWarning(false)}>
+        <Text>Dismiss</Text>
+      </TouchableOpacity>
+    </View>
+  )}
+  ```
+
+### 4. Optional: Status in SettingsScreen
+- In SettingsScreen, show current status:
+  - ""Device lock enabled (Face ID/passcode)."" or
+  - ""Device lock not enabled. Enable in iOS Settings for better privacy."".
+- This can reuse the same `checkDeviceSecurity()` or a cached flag in Zustand.
+
+## Files Created / Modified
+- **Created:**
+  - `services/securityService.ts` – `checkDeviceSecurity` helper.
+- **Modified:**
+  - `stores/appStore.ts` – UI state for `showSecurityWarning`.
+  - `screens/HomeScreen.tsx` – check security, show warning banner.
+  - `screens/SettingsScreen.tsx` – optionally show device lock status.
+
+## Acceptance Criteria
+✓ On devices without lock/biometric enrollment, a warning banner appears on HomeScreen.
+✓ Banner text clearly encourages enabling device lock for privacy.
+✓ User can dismiss the banner for the current session.
+✓ On secure devices, no warning banner appears.
+✓ Optional: Settings screen reflects correct device lock status.
+
+## Estimate
+**1 hour**
+",1,Medium

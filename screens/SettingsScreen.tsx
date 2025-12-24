@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } fr
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { checkDeviceSecurity } from "../services/securityService";
 import { cleanupOrphanedDrafts } from "../utils/draftCleanup";
+import { exportData } from "../services/exportService";
 
 /**
  * Settings Screen (Minimal Implementation)
@@ -14,6 +15,7 @@ const SettingsScreen: React.FC = () => {
   const [isSecure, setIsSecure] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCleaningDrafts, setIsCleaningDrafts] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const checkSecurity = async () => {
@@ -51,6 +53,19 @@ const SettingsScreen: React.FC = () => {
       );
     } finally {
       setIsCleaningDrafts(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setIsExporting(true);
+    try {
+      await exportData();
+      // Success toast is shown by exportService
+    } catch (error) {
+      // Error toast is shown by exportService
+      console.error('Export error in SettingsScreen:', error);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -123,6 +138,33 @@ const SettingsScreen: React.FC = () => {
 
           <Text style={styles.cleanupHint}>
             Removes drafts for completed, deleted, or sessions older than 48 hours.
+          </Text>
+        </View>
+      </View>
+
+      {/* Data Export Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Data Export</Text>
+
+        <View style={styles.card}>
+          <Text style={styles.cardDescription}>
+            Export all your practice data as JSON. Includes all practice areas, sessions, and reflections.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.exportButton, isExporting && styles.exportButtonDisabled]}
+            onPress={handleExportData}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <ActivityIndicator size="small" color={COLORS.surface} />
+            ) : (
+              <Text style={styles.exportButtonText}>Export Data</Text>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.exportHint}>
+            Creates a JSON file with all your data that you can save or share.
           </Text>
         </View>
       </View>
@@ -237,6 +279,30 @@ const styles = StyleSheet.create({
     color: COLORS.surface,
   },
   cleanupHint: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.xs,
+    marginTop: SPACING.sm,
+    textAlign: 'center',
+  },
+  exportButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  exportButtonDisabled: {
+    opacity: 0.6,
+  },
+  exportButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.surface,
+  },
+  exportHint: {
     fontSize: TYPOGRAPHY.fontSize.xs,
     color: COLORS.text.secondary,
     lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.xs,

@@ -176,3 +176,59 @@ export interface AppActions {
  */
 export type AppStore = AppState & AppActions;
 
+// ============================================================================
+// Export Types (for JSON data export)
+// ============================================================================
+
+/**
+ * Exported reflection data with computed isedited flag
+ * Field names use lowercase without underscores per export spec
+ */
+export interface ExportReflection {
+  format: number;
+  step2answer: string;
+  step3answer: string;
+  step4answer: string;
+  feedbackrating: number | null;
+  feedbacknote: string | null;
+  completedat: number;
+  updatedat: number | null;
+  isedited: boolean;
+}
+
+/**
+ * Exported session data with computed duration fields
+ * Field names use lowercase without underscores per export spec
+ */
+export interface ExportSession {
+  id: string;
+  previoussessionid: string | null;
+  intent: string;
+  startedat: number;
+  endedat: number | null;
+  targetdurationseconds: number | null;
+  actualdurationseconds: number | null;
+  mettarget: boolean | null;
+  reflection: ExportReflection | null;
+}
+
+/**
+ * Exported practice area with sessions array
+ * Field names use lowercase without underscores per export spec
+ */
+export interface ExportPracticeArea {
+  id: string;
+  name: string;
+  createdat: number;
+  sessions: ExportSession[];
+}
+
+/**
+ * Top-level export payload structure
+ * Field names use lowercase without underscores per export spec
+ */
+export interface ExportPayload {
+  exportdate: string;
+  practiceareas: ExportPracticeArea[];
+}
+
