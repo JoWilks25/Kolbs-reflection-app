@@ -23,6 +23,7 @@ type ReflectionFormatScreenNavigationProp = StackNavigationProp<
 
 interface FormatCardData {
   format: ReflectionFormat;
+  icon: string;
   title: string;
   description: string;
   timeEstimate: string;
@@ -31,18 +32,21 @@ interface FormatCardData {
 const FORMAT_CARDS: FormatCardData[] = [
   {
     format: 1,
+    icon: "⚡",
     title: "Direct & Action-Oriented",
     description: "Quick, focused reflection on concrete actions",
     timeEstimate: "3–5 minutes",
   },
   {
     format: 2,
+    icon: "🔍",
     title: "Reflective & Exploratory",
     description: "Deeper dive into patterns and underlying insights",
     timeEstimate: "5–8 minutes",
   },
   {
     format: 3,
+    icon: "⏱️",
     title: "Minimalist / Rapid",
     description: "Ultra-short capture of key takeaways",
     timeEstimate: "≈1 minute",
@@ -143,6 +147,7 @@ const ReflectionFormatScreen: React.FC = () => {
               onPress={() => handleSelectFormat(card.format)}
               activeOpacity={0.7}
             >
+              <Text style={styles.cardIcon}>{card.icon}</Text>
               <Text style={styles.cardTitle}>{card.title}</Text>
               <Text style={styles.cardDescription}>{card.description}</Text>
               <Text style={styles.cardTimeEstimate}>⏱ {card.timeEstimate}</Text>
@@ -236,6 +241,11 @@ const styles = StyleSheet.create({
   formatCardSelected: {
     borderColor: COLORS.primary,
     backgroundColor: COLORS.neutral[50],
+  },
+  cardIcon: {
+    fontSize: 48,
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
   },
   cardTitle: {
     fontSize: TYPOGRAPHY.fontSize.lg,
