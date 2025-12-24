@@ -37,8 +37,8 @@ _Version: 1.2 (Final with target duration feature + integer IDs)_
 
 ### Explicitly Out of Scope
 
-- ❌ Filters on timeline (by format, by feedback)
-- ❌ Synthesis/trends view (charts, analytics UI)
+- ❌ Filters on timeline (by format, by feedback) - **Post-MVP**
+- ❌ Synthesis/trends view (charts, analytics UI) - **Post-MVP**
 - ❌ Dedicated accessibility work beyond RN defaults
 - ❌ Cloud sync or external analytics
 - ❌ Intent editing (immutable after session start)
@@ -376,9 +376,37 @@ ORDER BY s.ended_at ASC;
 
 **Interactions:**
 
-- Tap Practice Area → navigate to `SessionSetupScreen` with `practiceAreaId`
+- Tap Practice Area → **blocking guard check** → navigate to `SessionSetupScreen` with `practiceAreaId`
 - Tap "+" → modal to enter PA name → insert into `practice_areas`
 - Tap pending reflection banner → navigate to `SeriesTimelineScreen`, auto-scroll to pending session
+
+**Blocking Guard Logic:**
+
+```typescript
+// Prevent new session if previous session lacks reflection
+const handlePracticeAreaPress = async (practiceAreaId: string) => {
+  const blockingSession = await getBlockingUnreflectedSession(practiceAreaId);
+  
+  if (blockingSession) {
+    Alert.alert(
+      'Reflection Pending',
+      'You have a pending reflection for your last session. Please complete it or delete the session before starting a new one.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Go to Timeline', onPress: () => navigation.navigate('SeriesTimeline', { 
+          practiceAreaId, 
+          focusSessionId: blockingSession.id 
+        }) }
+      ]
+    );
+    return;
+  }
+  
+  navigation.navigate("SessionSetup", { practiceAreaId });
+};
+```
+
+**Rationale:** Enforces reflection discipline, prevents accumulation of unreflected sessions, aligns with PRD goal of "3+ consecutive reflection Sessions per user per week."
 
 **Time Estimate:** 0.75 days (6 hours)
 
@@ -408,6 +436,7 @@ ORDER BY s.ended_at ASC;
     - Selected button highlighted
     - Tap again to deselect (no target)
     - Small text: _"You'll get a notification when time is up, but can continue practicing."_
+    - **Note:** Production uses only these four presets (test presets removed)
 - "Start Session" button (disabled if intent empty)
 
 **Data Queries:**
@@ -793,7 +822,12 @@ const handleFinish = async () => {
 **UI Components:**
 
 - Practice Area name (header)
-- FlatList of sessions (ordered by `started_at` ASC - oldest first):
+- **Sort Toggle:**
+  - Users can switch between "Newest first" (desc) and "Oldest first" (asc)
+  - Default: "Newest first" (most recent sessions at top)
+  - State managed locally, not persisted
+  - Improves navigation for both recent review and chronological learning progression
+- FlatList of sessions (ordered by `started_at` based on sort selection):
 
 **Each session row shows:**
     - Date/time
@@ -982,7 +1016,19 @@ const getPreviousIntent = async (session) => {
     - ✅ _"Device lock enabled (Face ID)"_ (if secure)
     - ⚠️ _"Device lock not enabled. Enable in iOS Settings for better privacy."_ (if not secure)
 
-**Section 3: About**
+**Section 3: Storage Management**
+
+- "Clean Up Old Drafts" button
+- Description: _"Clean up old reflection drafts that are no longer needed."_
+- Removes drafts for:
+  - Completed reflections (saved to DB)
+  - Deleted sessions
+  - Sessions older than 48h (expired reflection window)
+- Shows count of cleaned drafts in success alert
+- Runs automatically on app launch (silent cleanup)
+- Manual trigger available for user control
+
+**Section 4: About**
 
 - App version
 - Developer info (optional)
@@ -1650,6 +1696,14 @@ useEffect(() => {
 ***
 
 ## 13. Post-MVP Roadmap
+
+### 13.0 Implemented Enhancements (Beyond Original Spec)
+
+| Feature | Status | Value |
+| :-- | :-- | :-- |
+| **Blocking guard for new sessions** | ✅ Implemented | High - enforces reflection discipline |
+| **Sort toggle (newest/oldest first)** | ✅ Implemented | Medium - improves navigation flexibility |
+| **Draft cleanup utility** | ✅ Implemented | Medium - storage management & user control |
 
 ### 13.1 Deferred Features (High Value)
 

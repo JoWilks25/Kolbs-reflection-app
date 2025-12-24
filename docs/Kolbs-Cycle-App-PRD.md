@@ -57,6 +57,8 @@ The chronological chain of all Sessions under a particular Practice Area. Each P
 
 - As a learner, I want to ensure every Session is explicitly linked—by Practice Area and as the next in sequence—to the previous Session, so my progress stays contextual and continuous.
 
+- As a learner, I want to be prevented from starting a new session if I haven't reflected on my previous session, so I maintain consistent reflection discipline and don't lose context.
+
 - As a returning user, at each Session start, I want to see my last "What will you try next?" answer from my previous Session in this Practice Area's Series, enabling directed intent.
 
 - As a reflecting practitioner, I want my post-Session review to cover what actually happened, the lesson or insight gained, and what I will pursue next, locked into an ongoing chain.
@@ -215,7 +217,13 @@ This feedback allows the app (and you, as the designer) to:
 
 **Review Dashboard**
 
-For every Practice Area, the app displays the entire chronological Series in a clean, navigable timeline. Each Session shows:
+For every Practice Area, the app displays the entire chronological Series in a clean, navigable timeline.
+
+**Sort Options:**
+- Users can toggle between "Newest first" (default) and "Oldest first" views
+- Sort preference applies to current session only (not persisted)
+
+Each Session shows:
 
 - Date and time
 - Session intent ("What will you try next?" from the previous Session, and today's intent)
@@ -228,11 +236,16 @@ For every Practice Area, the app displays the entire chronological Series in a c
 
 Users can step forward and backward through any Series, moving linearly through their learning journey. There is no branching, no parallel chains—just a clear, unbroken progression within each Practice Area.
 
-**Filters & Viewing Options**
+**Filters & Viewing Options (Post-MVP)**
 
+The following features are explicitly deferred to post-MVP:
 - Filter Sessions by reflection format (e.g., "Show only Reflective & Exploratory sessions")
 - Filter by reflection feedback (e.g., "Show sessions where reflection felt Hard/Frustrating" to identify friction patterns)
-- Use compact visual indicators (e.g., D / R / M for format, emoji icons for reflection feedback) in the Session list for at-a-glance scanning
+- Synthesis & Trends view with charts and analytics
+
+MVP includes:
+- Sort toggle (Newest first / Oldest first)
+- Compact visual indicators (format badges, emoji icons for reflection feedback) in the Session list for at-a-glance scanning
 
 **Synthesis & Trends**
 
@@ -363,6 +376,11 @@ Finally, you tap the 🙂 **Good / Helpful** emoji to rate the reflection task�
 - No cloud sync, no server, no external data dependencies.
 - Manual export/backup only (plaintext or encrypted), with strong privacy messaging.
 - Privacy status consistently communicated to user throughout the app.
+
+### Storage Management
+
+- Automatic cleanup of orphaned reflection drafts (completed sessions, deleted sessions, >48h old)
+- Manual cleanup utility in Settings for user control
 
 ### Scalability & Performance
 
