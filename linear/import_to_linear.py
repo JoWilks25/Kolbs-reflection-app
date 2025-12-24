@@ -21,7 +21,7 @@ PROJECT_ID = "b89210fa-8931-4fff-b920-17f72accb4ea"   # See instructions below t
 LINEAR_API_URL = "https://api.linear.app/graphql"
 
 # CSV file path
-CSV_FILE = "series_timeline_tickets.csv"
+CSV_FILE = "export_settings_tickets.csv"
 
 # ============================================================================
 # HELPER FUNCTIONS

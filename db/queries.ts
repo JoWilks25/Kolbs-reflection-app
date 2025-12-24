@@ -797,3 +797,44 @@ export async function getBlockingUnreflectedSession(
   return result || null;
 }
 
+/**
+ * Get all data for export (Practice Areas with Sessions and Reflections)
+ * Returns all non-deleted practice areas with their sessions and reflections
+ * Used by exportService to generate JSON export
+ * @returns Array of practice areas with nested sessions and reflections
+ */
+export async function getExportData(): Promise<any[]> {
+  const db = getDatabase();
+  
+  // Get all non-deleted practice areas ordered by created_at ASC
+  const practiceAreas = await db.getAllAsync<any>(
+    `SELECT id, name, created_at
+     FROM practice_areas
+     WHERE is_deleted = 0
+     ORDER BY created_at ASC`
+  );
+
+  // For each practice area, get sessions with reflections
+  const result = [];
+  for (const pa of practiceAreas) {
+    const sessions = await db.getAllAsync<any>(
+      `SELECT s.id, s.previous_session_id, s.intent, s.started_at, s.ended_at, 
+              s.target_duration_seconds,
+              r.format, r.step2_answer, r.step3_answer, r.step4_answer,
+              r.feedback_rating, r.feedback_note, r.completed_at, r.updated_at
+       FROM sessions s
+       LEFT JOIN reflections r ON r.session_id = s.id
+       WHERE s.practice_area_id = ? AND s.is_deleted = 0
+       ORDER BY s.started_at ASC`,
+      [pa.id]
+    );
+
+    result.push({
+      ...pa,
+      sessions,
+    });
+  }
+
+  return result;
+}
+
