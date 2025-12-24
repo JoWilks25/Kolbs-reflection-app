@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from "react-native";
+import Constants from "expo-constants";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { checkDeviceSecurity } from "../services/securityService";
 import { cleanupOrphanedDrafts } from "../utils/draftCleanup";
@@ -16,6 +17,9 @@ const SettingsScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isCleaningDrafts, setIsCleaningDrafts] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  
+  // Get app version from expo-constants
+  const version = Constants.expoConfig?.version ?? '1.0.0';
 
   useEffect(() => {
     const checkSecurity = async () => {
@@ -78,7 +82,7 @@ const SettingsScreen: React.FC = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       {/* Privacy & Security Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Privacy & Security</Text>
@@ -110,7 +114,8 @@ const SettingsScreen: React.FC = () => {
           <View style={styles.divider} />
 
           <Text style={styles.privacyStatement}>
-            All data is stored locally on your device, encrypted at rest. No cloud sync.
+            All data is stored locally on your device, encrypted at rest.{'\n'}
+            No cloud sync or external analytics.
           </Text>
         </View>
       </View>
@@ -144,11 +149,11 @@ const SettingsScreen: React.FC = () => {
 
       {/* Data Export Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Data Export</Text>
+        <Text style={styles.sectionTitle}>Export Data</Text>
 
         <View style={styles.card}>
           <Text style={styles.cardDescription}>
-            Export all your practice data as JSON. Includes all practice areas, sessions, and reflections.
+            Export all Practice Areas, Sessions, and Reflections as JSON. Use for manual analysis or backup.
           </Text>
 
           <TouchableOpacity
@@ -168,7 +173,25 @@ const SettingsScreen: React.FC = () => {
           </Text>
         </View>
       </View>
-    </View>
+
+      {/* About Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>About</Text>
+
+        <View style={styles.card}>
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Version</Text>
+            <Text style={styles.aboutValue}>{version}</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.aboutTagline}>
+            Built for personal reflection and learning.
+          </Text>
+        </View>
+      </View>
+    </ScrollView>
   );
 };
 
@@ -307,6 +330,27 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.xs,
     marginTop: SPACING.sm,
+    textAlign: 'center',
+  },
+  aboutRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  aboutLabel: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: COLORS.text.primary,
+  },
+  aboutValue: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.secondary,
+  },
+  aboutTagline: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.sm,
     textAlign: 'center',
   },
 });
