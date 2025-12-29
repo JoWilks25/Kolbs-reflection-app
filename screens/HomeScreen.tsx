@@ -14,13 +14,13 @@ import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
-import { PracticeAreaWithStats, PendingReflection } from '../utils/types';
-import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestData, getBlockingUnreflectedSession } from "../db/queries";
+import { PracticeAreaWithStats, PendingReflection, PracticeArea } from '../utils/types';
+import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestData, getBlockingUnreflectedSession, updatePracticeArea } from "../db/queries";
 import { getDatabase } from "../db/migrations";
 import PendingReflectionsBanner from "../components/PendingReflectionsBanner";
 import PracticeAreaItem from "../components/PracticeAreaItem";
 import EmptyState from "../components/EmptyState";
-import CreatePracticeAreaModal from "../components/CreatePracticeAreaModal";
+import PracticeAreaModal from "../components/PracticeAreaModal";
 import { checkDeviceSecurity } from "../services/securityService";
 import SecurityWarningBanner from "../components/SecurityWarningBanner";
 
@@ -48,6 +48,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   // Create modal state
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedPracticeArea, setSelectedPracticeArea] = useState<PracticeArea | undefined>();
 
   // Pending reflections state
   const [pendingReflections, setPendingReflections] = useState<PendingReflection[]>([]);
@@ -185,6 +186,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const closeCreateModal = () => {
+    setSelectedPracticeArea(undefined);
     setIsCreateModalVisible(false);
   };
 
@@ -196,11 +198,9 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       if (nameExists) {
         throw new Error("A Practice Area with this name already exists");
       }
-
       await createPracticeArea(name);
       closeCreateModal();
       await loadPracticeAreas();
-      Alert.alert("Success", "Practice Area created");
     } catch (error: any) {
       console.error("Error creating practice area:", error);
       const errorMessage = error.message || "Failed to create Practice Area. Please try again.";
@@ -210,6 +210,32 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       setIsCreating(false);
     }
   };
+
+  const handleEditPracticeArea = async (editedName: string, id: string) => {
+    setIsCreating(true);
+    try {
+      // Check for duplicate name
+      const nameExists = await checkPracticeAreaNameExists(editedName);
+      if (nameExists) {
+        throw new Error("A Practice Area with this name already exists");
+      }
+      await updatePracticeArea(editedName, id);
+      closeCreateModal();
+      await loadPracticeAreas();
+    } catch (error: any) {
+      console.error("Error creating practice area:", error);
+      const errorMessage = error.message || "Failed to create Practice Area. Please try again.";
+      Alert.alert("Error", errorMessage);
+      throw error; // Re-throw so modal can handle it
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const openEditPracticeAreaModal = (practiceArea: PracticeArea) => {
+    setSelectedPracticeArea(practiceArea);
+    setIsCreateModalVisible(true);
+  }
 
   // Loading State
   if (isLoading && practiceAreas.length === 0) {
@@ -240,6 +266,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             item={item}
             onPress={handlePracticeAreaPress}
             onViewTimeline={handleViewTimeline}
+            onEdit={openEditPracticeAreaModal}
           />
         )}
         keyExtractor={(item) => item.id}
@@ -269,11 +296,13 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       {/* Create Practice Area Modal */}
-      <CreatePracticeAreaModal
+      <PracticeAreaModal
         visible={isCreateModalVisible}
         onClose={closeCreateModal}
-        onSubmit={handleCreatePracticeArea}
+        onCreate={handleCreatePracticeArea}
+        onEdit={handleEditPracticeArea}
         isCreating={isCreating}
+        selectedPracticeArea={selectedPracticeArea}
       />
     </View>
   );

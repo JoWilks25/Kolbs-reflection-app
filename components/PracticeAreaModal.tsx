@@ -6,21 +6,27 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
+import { PracticeArea } from "../utils";
 
-export interface CreatePracticeAreaModalProps {
+export interface PracticeAreaModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (name: string) => Promise<void>;
+  onCreate: (name: string) => Promise<void>;
+  onEdit: (editedName: string, id: string) => Promise<void>;
   isCreating?: boolean;
+  selectedPracticeArea?: PracticeArea;
 }
 
-const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
+const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
   visible,
   onClose,
-  onSubmit,
+  onCreate,
+  onEdit,
   isCreating = false,
+  selectedPracticeArea,
 }) => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -32,6 +38,12 @@ const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
       setError("");
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (selectedPracticeArea) {
+      setName(selectedPracticeArea.name);
+    }
+  }, [selectedPracticeArea?.name])
 
   const validateName = (nameToValidate: string): boolean => {
     const trimmedName = nameToValidate.trim();
@@ -46,12 +58,21 @@ const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
   const handleSubmit = async () => {
     const trimmedName = name.trim();
 
+    if (trimmedName === selectedPracticeArea?.name) {
+      Alert.alert("No changes made to name")
+      return;
+    }
+
     if (!validateName(trimmedName)) {
       return;
     }
 
     try {
-      await onSubmit(trimmedName);
+      if (selectedPracticeArea?.id) {
+        await onEdit(trimmedName, selectedPracticeArea.id)
+      } else {
+        await onCreate(trimmedName);
+      }
       // If successful, the parent will close the modal
     } catch (error: any) {
       // Display error from parent (e.g., duplicate name)
@@ -71,7 +92,7 @@ const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>New Practice Area</Text>
+          <Text style={styles.modalTitle}>{!selectedPracticeArea?.id ? 'New' : 'Edit'} Practice Area</Text>
 
           <TextInput
             style={styles.input}
@@ -205,5 +226,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreatePracticeAreaModal;
+export default PracticeAreaModal;
 

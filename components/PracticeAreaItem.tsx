@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { PracticeAreaWithStats } from "../utils/types";
+import { PracticeArea, PracticeAreaWithStats } from "../utils/types";
 import { formatDate } from "../utils/timeFormatting";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 
@@ -13,9 +13,10 @@ export interface PracticeAreaItemProps {
   item: PracticeAreaWithStats;
   onPress: (practiceAreaId: string) => void;
   onViewTimeline: (practiceAreaId: string) => void;
+  onEdit: (selectedPracticeArea: PracticeArea) => void;
 }
 
-const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress, onViewTimeline }) => {
+const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress, onViewTimeline, onEdit }) => {
   const lastSessionText = item.lastSessionDate
     ? formatDate(item.lastSessionDate)
     : "No sessions yet";
@@ -39,6 +40,7 @@ const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress, onVi
     >
       <View style={styles.itemContent}>
         <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => onEdit(item)}><Text style={styles.practiceAreaName}>✏️</Text></TouchableOpacity>
           <Text style={styles.practiceAreaName}>{item.name}</Text>
           {hasIndicators && (
             <View style={styles.indicatorContainer}>
