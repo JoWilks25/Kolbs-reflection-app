@@ -135,6 +135,25 @@ export async function createPracticeArea(name: string): Promise<PracticeArea> {
   };
 }
 
+export async function deletePracticeArea(id: string): Promise<boolean> {
+  const db = getDatabase();
+
+  const result = await db.runAsync(`
+    DELETE FROM practice_areas 
+    WHERE id = ? 
+    AND NOT EXISTS (
+      SELECT 1 FROM sessions 
+      WHERE practice_area_id = ? AND is_deleted = 0
+    )
+  `, [id, id]);
+
+  if (result.changes === 0) {
+    throw new Error('Practice Area has sessions or not found');
+  }
+
+  return true;
+}
+
 /**
  * Get sessions that have ended but have no reflection completed within the last 48 hours
  * @returns Array of sessions with practice area names, ordered by ended_at (oldest first)

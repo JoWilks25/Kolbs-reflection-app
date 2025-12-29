@@ -15,7 +15,7 @@ import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
 import { PracticeAreaWithStats, PendingReflection, PracticeArea } from '../utils/types';
-import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestData, getBlockingUnreflectedSession, updatePracticeArea } from "../db/queries";
+import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestData, getBlockingUnreflectedSession, updatePracticeArea, deletePracticeArea } from "../db/queries";
 import { getDatabase } from "../db/migrations";
 import PendingReflectionsBanner from "../components/PendingReflectionsBanner";
 import PracticeAreaItem from "../components/PracticeAreaItem";
@@ -47,7 +47,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
   // Create modal state
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
   const [selectedPracticeArea, setSelectedPracticeArea] = useState<PracticeArea | undefined>();
 
   // Pending reflections state
@@ -191,7 +190,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const handleCreatePracticeArea = async (name: string) => {
-    setIsCreating(true);
+    setIsLoading(true);
     try {
       // Check for duplicate name
       const nameExists = await checkPracticeAreaNameExists(name);
@@ -207,12 +206,12 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       Alert.alert("Error", errorMessage);
       throw error; // Re-throw so modal can handle it
     } finally {
-      setIsCreating(false);
+      setIsLoading(false);
     }
   };
 
   const handleEditPracticeArea = async (editedName: string, id: string) => {
-    setIsCreating(true);
+    setIsLoading(true);
     try {
       // Check for duplicate name
       const nameExists = await checkPracticeAreaNameExists(editedName);
@@ -228,13 +227,40 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       Alert.alert("Error", errorMessage);
       throw error; // Re-throw so modal can handle it
     } finally {
-      setIsCreating(false);
+      setIsLoading(false);
     }
   };
 
   const openEditPracticeAreaModal = (practiceArea: PracticeArea) => {
     setSelectedPracticeArea(practiceArea);
     setIsCreateModalVisible(true);
+  }
+
+  const handleDeletePracticeArea = (id: string) => {
+    console.log('id', id)
+    Alert.alert(
+      'Delete Practice Area?',
+      'This will permanently remove it and all sessions.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePracticeArea(id);
+              // Refresh HomeScreen list
+              const practiceAreas = await getPracticeAreas(); // your query function
+              setPracticeAreas(practiceAreas);
+              closeCreateModal();
+              // showToast('Practice Area deleted');
+            } catch (error) {
+              console.error("Cannot delete:", error)
+            }
+          }
+        }
+      ]
+    );
   }
 
   // Loading State
@@ -301,7 +327,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         onClose={closeCreateModal}
         onCreate={handleCreatePracticeArea}
         onEdit={handleEditPracticeArea}
-        isCreating={isCreating}
+        onDelete={handleDeletePracticeArea}
+        isLoading={isLoading}
         selectedPracticeArea={selectedPracticeArea}
       />
     </View>

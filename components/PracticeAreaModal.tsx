@@ -16,7 +16,8 @@ export interface PracticeAreaModalProps {
   onClose: () => void;
   onCreate: (name: string) => Promise<void>;
   onEdit: (editedName: string, id: string) => Promise<void>;
-  isCreating?: boolean;
+  onDelete: (id: string) => void;
+  isLoading?: boolean;
   selectedPracticeArea?: PracticeArea;
 }
 
@@ -25,7 +26,8 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
   onClose,
   onCreate,
   onEdit,
-  isCreating = false,
+  onDelete,
+  isLoading = false,
   selectedPracticeArea,
 }) => {
   const [name, setName] = useState("");
@@ -92,8 +94,16 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>{!selectedPracticeArea?.id ? 'New' : 'Edit'} Practice Area</Text>
-
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{!selectedPracticeArea?.id ? 'New' : 'Edit'} Practice Area
+            </Text>
+            {
+              selectedPracticeArea?.id &&
+              <TouchableOpacity style={styles.iconOnlyDelete} onPress={() => onDelete(selectedPracticeArea.id)}>
+                <Text style={styles.deleteIcon}>🗑️</Text>
+              </TouchableOpacity>
+            }
+          </View>
           <TextInput
             style={styles.input}
             placeholder="Practice Area name"
@@ -102,7 +112,7 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
             onChangeText={setName}
             maxLength={100}
             autoFocus={true}
-            editable={!isCreating}
+            editable={!isLoading}
           />
 
           <View style={styles.characterCountContainer}>
@@ -115,22 +125,21 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
             <TouchableOpacity
               style={[styles.modalButton, styles.cancelButton]}
               onPress={onClose}
-              disabled={isCreating}
+              disabled={isLoading}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={[
                 styles.modalButton,
                 styles.createButton,
-                isCreating && styles.createButtonDisabled,
+                isLoading && styles.createButtonDisabled,
               ]}
               onPress={handleSubmit}
-              disabled={isCreating}
+              disabled={isLoading}
             >
               <Text style={styles.createButtonText}>
-                {isCreating ? "Creating..." : "Create"}
+                {isLoading ? "Creating..." : "Create"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -162,6 +171,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSize.xl,
@@ -204,6 +219,17 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  iconOnlyDelete: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  deleteIcon: {
+    fontSize: 20,
+    color: '#DC2626', // Red destructive
   },
   cancelButton: {
     backgroundColor: COLORS.neutral[200],
