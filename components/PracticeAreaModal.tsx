@@ -6,21 +6,29 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
+import { PracticeArea } from "../utils";
 
-export interface CreatePracticeAreaModalProps {
+export interface PracticeAreaModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (name: string) => Promise<void>;
-  isCreating?: boolean;
+  onCreate: (name: string) => Promise<void>;
+  onEdit: (editedName: string, id: string) => Promise<void>;
+  onDelete: (id: string) => void;
+  isLoading?: boolean;
+  selectedPracticeArea?: PracticeArea;
 }
 
-const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
+const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
   visible,
   onClose,
-  onSubmit,
-  isCreating = false,
+  onCreate,
+  onEdit,
+  onDelete,
+  isLoading = false,
+  selectedPracticeArea,
 }) => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -32,6 +40,12 @@ const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
       setError("");
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (selectedPracticeArea) {
+      setName(selectedPracticeArea.name);
+    }
+  }, [selectedPracticeArea?.name])
 
   const validateName = (nameToValidate: string): boolean => {
     const trimmedName = nameToValidate.trim();
@@ -46,12 +60,21 @@ const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
   const handleSubmit = async () => {
     const trimmedName = name.trim();
 
+    if (trimmedName === selectedPracticeArea?.name) {
+      Alert.alert("No changes made to name")
+      return;
+    }
+
     if (!validateName(trimmedName)) {
       return;
     }
 
     try {
-      await onSubmit(trimmedName);
+      if (selectedPracticeArea?.id) {
+        await onEdit(trimmedName, selectedPracticeArea.id)
+      } else {
+        await onCreate(trimmedName);
+      }
       // If successful, the parent will close the modal
     } catch (error: any) {
       // Display error from parent (e.g., duplicate name)
@@ -71,8 +94,16 @@ const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>New Practice Area</Text>
-
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{!selectedPracticeArea?.id ? 'New' : 'Edit'} Practice Area
+            </Text>
+            {
+              selectedPracticeArea?.id &&
+              <TouchableOpacity style={styles.iconOnlyDelete} onPress={() => onDelete(selectedPracticeArea.id)}>
+                <Text style={styles.deleteIcon}>🗑️</Text>
+              </TouchableOpacity>
+            }
+          </View>
           <TextInput
             style={styles.input}
             placeholder="Practice Area name"
@@ -81,7 +112,7 @@ const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
             onChangeText={setName}
             maxLength={100}
             autoFocus={true}
-            editable={!isCreating}
+            editable={!isLoading}
           />
 
           <View style={styles.characterCountContainer}>
@@ -94,22 +125,21 @@ const CreatePracticeAreaModal: React.FC<CreatePracticeAreaModalProps> = ({
             <TouchableOpacity
               style={[styles.modalButton, styles.cancelButton]}
               onPress={onClose}
-              disabled={isCreating}
+              disabled={isLoading}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={[
                 styles.modalButton,
                 styles.createButton,
-                isCreating && styles.createButtonDisabled,
+                isLoading && styles.createButtonDisabled,
               ]}
               onPress={handleSubmit}
-              disabled={isCreating}
+              disabled={isLoading}
             >
               <Text style={styles.createButtonText}>
-                {isCreating ? "Creating..." : "Create"}
+                {isLoading ? "Creating..." : "Create"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -141,6 +171,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: TYPOGRAPHY.fontSize.xl,
@@ -184,6 +220,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
+  iconOnlyDelete: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  deleteIcon: {
+    fontSize: 20,
+    color: '#DC2626', // Red destructive
+  },
   cancelButton: {
     backgroundColor: COLORS.neutral[200],
   },
@@ -205,5 +252,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreatePracticeAreaModal;
+export default PracticeAreaModal;
 

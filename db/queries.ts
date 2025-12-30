@@ -68,6 +68,31 @@ export async function getPracticeAreas(): Promise<PracticeAreaWithStats[]> {
   })) as PracticeAreaWithStats[];
 }
 
+export async function updatePracticeArea(editedName: string, id: string): Promise<PracticeArea> {
+  const db = getDatabase();
+
+  const result = await db.runAsync(
+    'UPDATE practice_areas SET name = ? WHERE id = ? AND is_deleted = 0',
+    [editedName, id]
+  );
+
+  if (result.changes === 0) {
+    throw new Error('Practice Area not found or already deleted');
+  }
+
+  // Fetch updated record
+  const updated = await db.getFirstAsync<PracticeArea>(
+    'SELECT * FROM practice_areas WHERE id = ?',
+    [id]
+  );
+
+  if (!updated) {
+    throw new Error('Failed to retrieve updated Practice Area');
+  }
+
+  return updated;
+}
+
 /**
  * Check if a Practice Area name already exists (case-insensitive, trimmed)
  * @param name - The name to check
@@ -108,6 +133,25 @@ export async function createPracticeArea(name: string): Promise<PracticeArea> {
     created_at,
     is_deleted: 0,
   };
+}
+
+export async function deletePracticeArea(id: string): Promise<boolean> {
+  const db = getDatabase();
+
+  const result = await db.runAsync(`
+    DELETE FROM practice_areas 
+    WHERE id = ? 
+    AND NOT EXISTS (
+      SELECT 1 FROM sessions 
+      WHERE practice_area_id = ? AND is_deleted = 0
+    )
+  `, [id, id]);
+
+  if (result.changes === 0) {
+    throw new Error('Practice Area has sessions or not found');
+  }
+
+  return true;
 }
 
 /**
@@ -805,7 +849,7 @@ export async function getBlockingUnreflectedSession(
  */
 export async function getExportData(): Promise<any[]> {
   const db = getDatabase();
-  
+
   // Get all non-deleted practice areas ordered by created_at ASC
   const practiceAreas = await db.getAllAsync<any>(
     `SELECT id, name, created_at
