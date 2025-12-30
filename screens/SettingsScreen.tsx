@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from "react-native";
 import Constants from "expo-constants";
+import * as DocumentPicker from 'expo-document-picker';
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { checkDeviceSecurity } from "../services/securityService";
 import { cleanupOrphanedDrafts } from "../utils/draftCleanup";
 import { exportData } from "../services/exportService";
+import { importJsonData } from "../services/importService";
+import { getPracticeAreas } from "../db/queries";
+import { useAppStore } from "../stores/appStore";
 
 /**
  * Settings Screen (Minimal Implementation)
@@ -17,9 +21,13 @@ const SettingsScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isCleaningDrafts, setIsCleaningDrafts] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  
+  const [isImporting, setIsImporting] = useState(false);
+
   // Get app version from expo-constants
   const version = Constants.expoConfig?.version ?? '1.0.0';
+
+  // Get Zustand store actions
+  const setPracticeAreas = useAppStore((state) => state.setPracticeAreas);
 
   useEffect(() => {
     const checkSecurity = async () => {
@@ -70,6 +78,47 @@ const SettingsScreen: React.FC = () => {
       console.error('Export error in SettingsScreen:', error);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleImportData = async () => {
+    setIsImporting(true);
+    try {
+      // Open document picker for JSON files
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        copyToCacheDirectory: true,
+      });
+
+      // Check if user cancelled
+      if (result.canceled) {
+        console.log('Import cancelled by user');
+        setIsImporting(false);
+        return;
+      }
+
+      // Get the selected file
+      const file = result.assets[0];
+      console.log('Selected file:', file.uri);
+
+      // Import the data
+      const importResult = await importJsonData(file.uri);
+
+      // Refresh Zustand store with updated data
+      const practiceAreas = await getPracticeAreas();
+      setPracticeAreas(practiceAreas);
+
+      // Show success alert
+      Alert.alert(
+        'Import Complete',
+        `Successfully restored ${importResult.practiceAreasCount} practice area${importResult.practiceAreasCount === 1 ? '' : 's'} with ${importResult.sessionsCount} session${importResult.sessionsCount === 1 ? '' : 's'} and ${importResult.reflectionsCount} reflection${importResult.reflectionsCount === 1 ? '' : 's'}.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      // Error toast is shown by importService
+      console.error('Import error in SettingsScreen:', error);
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -170,6 +219,33 @@ const SettingsScreen: React.FC = () => {
 
           <Text style={styles.exportHint}>
             Creates a JSON file with all your data that you can save or share.
+          </Text>
+        </View>
+      </View>
+
+      {/* Data Import Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Import Data</Text>
+
+        <View style={styles.card}>
+          <Text style={styles.cardDescription}>
+            Restore Practice Areas, Sessions, and Reflections from a previously exported JSON file. This will replace all existing data.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.importButton, isImporting && styles.importButtonDisabled]}
+            onPress={handleImportData}
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <ActivityIndicator size="small" color={COLORS.surface} />
+            ) : (
+              <Text style={styles.importButtonText}>Import Data</Text>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.importHint}>
+            Select a JSON export file to restore your data. All current data will be replaced.
           </Text>
         </View>
       </View>
@@ -326,6 +402,30 @@ const styles = StyleSheet.create({
     color: COLORS.surface,
   },
   exportHint: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.xs,
+    marginTop: SPACING.sm,
+    textAlign: 'center',
+  },
+  importButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  importButtonDisabled: {
+    opacity: 0.6,
+  },
+  importButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.surface,
+  },
+  importHint: {
     fontSize: TYPOGRAPHY.fontSize.xs,
     color: COLORS.text.secondary,
     lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.xs,
