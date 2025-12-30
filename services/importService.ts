@@ -7,6 +7,7 @@
  */
 
 import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import Toast from 'react-native-toast-message';
 import { getDatabase } from '../db/migrations';
 import type { ExportPayload, ExportPracticeArea, ExportSession, ExportReflection } from '../utils/types';
@@ -40,8 +41,10 @@ export async function importJsonData(fileUri: string): Promise<ImportResult> {
   try {
     console.log('Starting data import from:', fileUri);
 
-    // Step 1: Read file contents
-    const fileContents = await FileSystem.readAsStringAsync(fileUri);
+    // Step 1: Read file contents using legacy API (new File API doesn't have read method)
+    const fileContents = await FileSystemLegacy.readAsStringAsync(fileUri, {
+      encoding: FileSystemLegacy.EncodingType.UTF8,
+    });
     console.log('File read successfully, size:', fileContents.length, 'bytes');
 
     // Step 2: Parse JSON
