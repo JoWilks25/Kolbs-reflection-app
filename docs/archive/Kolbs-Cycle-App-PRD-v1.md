@@ -152,6 +152,50 @@ Best for: Very short sessions or low-energy moments; designed to be completed in
 
 ---
 
+### Phase 1: Select Coaching Tone & Enable AI (Optional)
+
+After ending a session, users select a **coaching tone** that determines how the AI (if enabled) will guide their reflection. Users also decide whether to enable AI assistance for this specific reflection.
+
+**Available Coaching Tones**
+
+**Facilitative**  
+Uses guided discovery to help users explore their own beliefs and emotions. Employs clarifying questions, examines thought patterns, and helps users draw their own conclusions. Best for self-directed learners who want space to think.
+
+**Socratic**  
+Employs structured questioning to build critical thinking systematically. Probes assumptions, examines evidence, and explores implications. Best for users who want rigorous analysis and pattern identification.
+
+**Supportive**  
+Provides emotional scaffolding through encouragement, normalizing struggle, and empathy. Offers specific assistance when needed. Best for challenging sessions or when motivation is low.
+
+**AI Toggle Behavior**
+
+Per-session decision:
+- **AI ON**: Generates context-aware placeholder starters and adaptive follow-up questions based on Practice Area, intent, previous session's "What will you try next?", and the user's current answers
+- **AI OFF**: Shows tone-adapted base prompts only; no placeholders or follow-ups
+
+**Tone Selection UI**
+
+Three cards (similar to v1.0 format selection):
+
+**Card 1: Facilitative – Guided Discovery**
+- Icon: 🧭
+- Description: "Explore your own insights through open questions"
+- Best for: Self-directed reflection
+
+**Card 2: Socratic – Structured Inquiry**  
+- Icon: 🔍
+- Description: "Challenge assumptions with purposeful questioning"
+- Best for: Deep analysis and pattern-spotting
+
+**Card 3: Supportive – Encouraging**
+- Icon: 💪
+- Description: "Build confidence with empathy and encouragement"
+- Best for: Tough sessions or low energy
+
+Below cards: **Toggle switch: "Enable AI coaching for this reflection"** (default: OFF)
+
+***
+
 **Format Selection Behavior:**
 
 - Users select their preferred format via a simple, clearly labeled picker before answering any reflection prompts.
