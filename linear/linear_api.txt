@@ -1,5 +1,0 @@
-lin_api_KiKHs8dY2NgpZ0nTNyuV07LEmUgQiooXfcXthCeI
-
-LINEAR_API_KEY = "lin_api_KiKHs8dY2NgpZ0nTNyuV07LEmUgQiooXfcXthCeI"  # Get from: Linear → Settings → Account → API
-TEAM_ID = "3821af06-f13d-403f-8e6b-46e053b6155f"   # See instructions below to find this
-PROJECT_ID = "kolbs-reflection-cycle-app-mvp-ed036c6c4fc6"   # See instructions below to find this

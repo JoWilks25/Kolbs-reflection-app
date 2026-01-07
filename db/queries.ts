@@ -1,11 +1,14 @@
 /**
- * Database query helpers
+ * Database query helpers for v2.0
  * 
- * This file will contain helper functions for common database queries.
- * Currently empty - ready for future implementation.
+ * Updated for AI-assisted coaching redesign:
+ * - Uses snake_case column names matching new schema
+ * - Renamed format → coaching_tone
+ * - Added type field to practice_areas
+ * - Added AI metrics to reflections
  */
 
-import { PracticeAreaWithStats, PracticeArea, Session, SessionWithReflection } from '../utils';
+import { PracticeAreaWithStats, PracticeArea, Session, SessionWithReflection, PracticeAreaType } from '../utils';
 import { getDatabase } from './migrations';
 import { generateId } from '../utils/uuid';
 
@@ -68,12 +71,23 @@ export async function getPracticeAreas(): Promise<PracticeAreaWithStats[]> {
   })) as PracticeAreaWithStats[];
 }
 
-export async function updatePracticeArea(editedName: string, id: string): Promise<PracticeArea> {
+export async function updatePracticeArea(editedName: string, id: string, type?: PracticeAreaType): Promise<PracticeArea> {
   const db = getDatabase();
 
+  // Build dynamic update query
+  const updates: string[] = ['name = ?'];
+  const values: any[] = [editedName];
+
+  if (type !== undefined) {
+    updates.push('type = ?');
+    values.push(type);
+  }
+
+  values.push(id); // Add id for WHERE clause
+
   const result = await db.runAsync(
-    'UPDATE practice_areas SET name = ? WHERE id = ? AND is_deleted = 0',
-    [editedName, id]
+    `UPDATE practice_areas SET ${updates.join(', ')} WHERE id = ? AND is_deleted = 0`,
+    values
   );
 
   if (result.changes === 0) {
@@ -114,22 +128,24 @@ export async function checkPracticeAreaNameExists(name: string): Promise<boolean
 /**
  * Create a new Practice Area
  * @param name - The name of the practice area
+ * @param type - The type of practice area (NEW in v2.0)
  * @returns The created Practice Area object
  */
-export async function createPracticeArea(name: string): Promise<PracticeArea> {
+export async function createPracticeArea(name: string, type: PracticeAreaType = 'solo_skill'): Promise<PracticeArea> {
   const db = getDatabase();
   const id = generateId();
   const created_at = Date.now();
 
   await db.runAsync(
-    `INSERT INTO practice_areas (id, name, created_at, is_deleted)
-     VALUES (?, ?, ?, 0)`,
-    [id, name, created_at]
+    `INSERT INTO practice_areas (id, name, type, created_at, is_deleted)
+     VALUES (?, ?, ?, ?, 0)`,
+    [id, name, type, created_at]
   );
 
   return {
     id,
     name,
+    type,
     created_at,
     is_deleted: 0,
   };
@@ -179,195 +195,6 @@ export async function getPendingReflections(): Promise<any[]> {
 }
 
 /**
- * Insert test data for SessionSetupScreen acceptance criteria testing
- * Creates practice areas covering:
- * 1. Normal case: Previous session with reflection (step4_answer)
- * 2. No reflection: Previous session but no reflection
- * 3. No sessions: Practice area with no sessions
- * 4. Long text: Previous session with long step4_answer (>100 chars) for collapsible test
- * 5. Deleted sessions: Should be filtered out by query
- */
-export async function insertTestData(): Promise<void> {
-  const db = getDatabase();
-  const now = Date.now();
-
-  // Test data structure for SessionSetupScreen
-  const testData = [
-    {
-      practiceAreaName: 'Piano Practice',
-      description: 'Normal case: Has previous session with reflection',
-      sessions: [
-        {
-          hoursAgo: 2,
-          intent: 'Worked on Chopin Nocturne Op. 9 No. 2',
-          durationMinutes: 45,
-          hasReflection: true,
-          reflection: {
-            format: 1, // Direct
-            step2_answer: 'Practiced the main theme and worked on the left hand accompaniment pattern. Struggled with the trills in the middle section.',
-            step3_answer: 'The trills require more finger independence. Need to practice them slowly and gradually increase tempo.',
-            step4_answer: 'Focus on trill exercises daily for 10 minutes before playing the full piece. Use metronome starting at 60 BPM.',
-          },
-        },
-      ],
-    },
-    {
-      practiceAreaName: 'Public Speaking',
-      description: 'No reflection: Has previous session but no reflection',
-      sessions: [
-        {
-          hoursAgo: 5,
-          intent: 'Practiced presentation for team meeting',
-          durationMinutes: 30,
-          hasReflection: false,
-        },
-      ],
-    },
-    {
-      practiceAreaName: 'Spanish Language',
-      description: 'No sessions: Practice area with no sessions',
-      sessions: [],
-    },
-    {
-      practiceAreaName: 'Rock Climbing',
-      description: 'Long text: Previous session with long step4_answer (>100 chars)',
-      sessions: [
-        {
-          hoursAgo: 1,
-          intent: 'Bouldering session at gym',
-          durationMinutes: 90,
-          hasReflection: true,
-          reflection: {
-            format: 2, // Reflective
-            step2_answer: 'Worked on V4 problems focusing on dynamic moves and overhangs. Completed 3 new problems but struggled with a specific crimp sequence.',
-            step3_answer: 'My grip strength is improving but I need to work on body positioning for overhangs. The crimp sequence requires more core engagement.',
-            step4_answer: 'Next session, I will dedicate 20 minutes to core strengthening exercises before climbing. Focus on hanging leg raises and planks. Then practice the crimp sequence on the training board, starting with easier holds and gradually moving to smaller ones. Also, watch technique videos on overhang body positioning to improve my approach angle.',
-          },
-        },
-      ],
-    },
-    {
-      practiceAreaName: 'Meditation',
-      description: 'Deleted session: Has deleted session that should be filtered out',
-      sessions: [
-        {
-          hoursAgo: 3,
-          intent: 'Morning meditation practice',
-          durationMinutes: 20,
-          hasReflection: true,
-          reflection: {
-            format: 3, // Minimalist
-            step2_answer: 'Focused on breath for 20 minutes',
-            step3_answer: 'Mind wandered less than usual',
-            step4_answer: 'Continue daily practice',
-          },
-          isDeleted: true, // This session will be deleted
-        },
-        {
-          hoursAgo: 10,
-          intent: 'Evening meditation',
-          durationMinutes: 15,
-          hasReflection: true,
-          reflection: {
-            format: 1,
-            step2_answer: 'Evening session was more challenging, mind was very active',
-            step3_answer: 'Evening sessions require more focus, might need to adjust timing',
-            step4_answer: 'Try morning sessions instead, or add a short walk before evening meditation',
-          },
-        },
-      ],
-    },
-  ];
-
-  let totalPracticeAreas = 0;
-  let totalSessions = 0;
-  let totalReflections = 0;
-  let deletedSessions = 0;
-
-  for (const practiceArea of testData) {
-    // Check if practice area already exists
-    const existing = await db.getFirstAsync<{ id: string }>(
-      `SELECT id FROM practice_areas WHERE name = ? AND is_deleted = 0`,
-      [practiceArea.practiceAreaName]
-    );
-
-    let practiceAreaId: string;
-
-    if (existing) {
-      practiceAreaId = existing.id;
-      console.log(`   ℹ️  Using existing practice area: ${practiceArea.practiceAreaName}`);
-    } else {
-      practiceAreaId = generateId();
-      await db.runAsync(
-        `INSERT INTO practice_areas (id, name, created_at, is_deleted)
-         VALUES (?, ?, ?, 0)`,
-        [practiceAreaId, practiceArea.practiceAreaName, now - (7 * 24 * 60 * 60 * 1000)]
-      );
-      console.log(`   ✅ Created practice area: ${practiceArea.practiceAreaName} (${practiceArea.description})`);
-      totalPracticeAreas++;
-    }
-
-    let previousSessionId: string | null = null;
-
-    // Create sessions for this practice area
-    for (const session of practiceArea.sessions) {
-      const sessionId = generateId();
-      const durationMs = session.durationMinutes * 60 * 1000;
-      const endedAt = now - (session.hoursAgo * 60 * 60 * 1000);
-      const startedAt = endedAt - durationMs;
-      const isDeleted = 'isDeleted' in session && session.isDeleted ? 1 : 0;
-
-      await db.runAsync(
-        `INSERT INTO sessions (id, practice_area_id, previous_session_id, intent, target_duration_seconds, started_at, ended_at, is_deleted)
-         VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
-        [sessionId, practiceAreaId, previousSessionId, session.intent, startedAt, endedAt, isDeleted]
-      );
-
-      totalSessions++;
-      if (isDeleted) {
-        deletedSessions++;
-      }
-
-      // Create reflection if it exists
-      if (session.hasReflection && !isDeleted && 'reflection' in session && session.reflection) {
-        const reflectionId = generateId();
-        const completedAt = endedAt + 1000; // Reflection completed 1 second after session ended
-
-        await db.runAsync(
-          `INSERT INTO reflections (id, session_id, format, step2_answer, step3_answer, step4_answer, feedback_rating, feedback_note, completed_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL)`,
-          [
-            reflectionId,
-            sessionId,
-            session.reflection.format,
-            session.reflection.step2_answer,
-            session.reflection.step3_answer,
-            session.reflection.step4_answer,
-            completedAt,
-          ]
-        );
-
-        totalReflections++;
-      }
-
-      previousSessionId = sessionId;
-    }
-  }
-
-  console.log('\n✅ Test data inserted successfully for SessionSetupScreen');
-  console.log(`   - Practice Areas: ${totalPracticeAreas} created`);
-  console.log(`   - Total Sessions: ${totalSessions}`);
-  console.log(`   - Reflections: ${totalReflections}`);
-  console.log(`   - Deleted Sessions: ${deletedSessions} (should be filtered out)`);
-  console.log('\n📋 Test Cases:');
-  console.log('   1. Piano Practice: Should show "Focus on trill exercises daily..."');
-  console.log('   2. Public Speaking: Should show "No previous intent recorded"');
-  console.log('   3. Spanish Language: Should show "No previous sessions"');
-  console.log('   4. Rock Climbing: Should show long text with "Show more" toggle');
-  console.log('   5. Meditation: Should show "Try morning sessions instead..." (deleted session filtered)\n');
-}
-
-/**
  * Get the most recent session's reflection intent (step4_answer) for a practice area
  * @param practiceAreaId - The ID of the practice area
  * @returns Session data with previous_next_action field (from step4_answer), or null if no session exists
@@ -390,15 +217,15 @@ export async function getPreviousSessionIntent(practiceAreaId: string) {
 /**
  * Get a Practice Area by ID
  * @param practiceAreaId - The ID of the practice area
- * @returns Practice Area object with id and name, or null if not found
+ * @returns Practice Area object, or null if not found
  */
-export async function getPracticeAreaById(practiceAreaId: string): Promise<{ id: string; name: string } | null> {
+export async function getPracticeAreaById(practiceAreaId: string): Promise<PracticeArea | null> {
   const db = getDatabase();
-  const result = await db.getFirstAsync<{ id: string; name: string }>(
-    `SELECT id, name FROM practice_areas WHERE id = ? AND is_deleted = 0`,
+  const result = await db.getFirstAsync<PracticeArea>(
+    `SELECT * FROM practice_areas WHERE id = ? AND is_deleted = 0`,
     [practiceAreaId]
   );
-  return result;
+  return result || null;
 }
 
 /**
@@ -561,6 +388,7 @@ export async function getSessionById(sessionId: string): Promise<Session | null>
 
 /**
  * Get a reflection by session ID
+ * UPDATED for v2.0: Returns coaching_tone and AI fields
  * @param sessionId - The ID of the session
  * @returns Reflection object or null if not found
  */
@@ -575,15 +403,20 @@ export async function getReflectionBySessionId(sessionId: string): Promise<any |
 
 /**
  * Insert a new reflection
+ * UPDATED for v2.0: Uses coaching_tone and AI fields
  * @param reflection - The reflection object to insert
  */
 export async function insertReflection(reflection: {
   id: string;
   session_id: string;
-  format: number;
+  coaching_tone: number;
+  ai_assisted: number;
   step2_answer: string;
   step3_answer: string;
   step4_answer: string;
+  ai_placeholders_shown: number;
+  ai_followups_shown: number;
+  ai_followups_answered: number;
   feedback_rating: number | null;
   feedback_note: string | null;
   completed_at: number;
@@ -592,18 +425,23 @@ export async function insertReflection(reflection: {
   const db = getDatabase();
   await db.runAsync(
     `INSERT INTO reflections (
-      id, session_id, format,
+      id, session_id, coaching_tone, ai_assisted,
       step2_answer, step3_answer, step4_answer,
+      ai_placeholders_shown, ai_followups_shown, ai_followups_answered,
       feedback_rating, feedback_note,
       completed_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       reflection.id,
       reflection.session_id,
-      reflection.format,
+      reflection.coaching_tone,
+      reflection.ai_assisted,
       reflection.step2_answer,
       reflection.step3_answer,
       reflection.step4_answer,
+      reflection.ai_placeholders_shown,
+      reflection.ai_followups_shown,
+      reflection.ai_followups_answered,
       reflection.feedback_rating,
       reflection.feedback_note,
       reflection.completed_at,
@@ -614,16 +452,21 @@ export async function insertReflection(reflection: {
 
 /**
  * Update an existing reflection
+ * UPDATED for v2.0: Uses coaching_tone and AI fields
  * @param sessionId - The session ID of the reflection to update
  * @param updates - The fields to update
  */
 export async function updateReflection(
   sessionId: string,
   updates: {
-    format?: number;
+    coaching_tone?: number;
+    ai_assisted?: number;
     step2_answer?: string;
     step3_answer?: string;
     step4_answer?: string;
+    ai_placeholders_shown?: number;
+    ai_followups_shown?: number;
+    ai_followups_answered?: number;
     feedback_rating?: number | null;
     feedback_note?: string | null;
     updated_at: number;
@@ -635,9 +478,13 @@ export async function updateReflection(
   const updateFields: string[] = [];
   const values: any[] = [];
 
-  if (updates.format !== undefined) {
-    updateFields.push('format = ?');
-    values.push(updates.format);
+  if (updates.coaching_tone !== undefined) {
+    updateFields.push('coaching_tone = ?');
+    values.push(updates.coaching_tone);
+  }
+  if (updates.ai_assisted !== undefined) {
+    updateFields.push('ai_assisted = ?');
+    values.push(updates.ai_assisted);
   }
   if (updates.step2_answer !== undefined) {
     updateFields.push('step2_answer = ?');
@@ -650,6 +497,18 @@ export async function updateReflection(
   if (updates.step4_answer !== undefined) {
     updateFields.push('step4_answer = ?');
     values.push(updates.step4_answer);
+  }
+  if (updates.ai_placeholders_shown !== undefined) {
+    updateFields.push('ai_placeholders_shown = ?');
+    values.push(updates.ai_placeholders_shown);
+  }
+  if (updates.ai_followups_shown !== undefined) {
+    updateFields.push('ai_followups_shown = ?');
+    values.push(updates.ai_followups_shown);
+  }
+  if (updates.ai_followups_answered !== undefined) {
+    updateFields.push('ai_followups_answered = ?');
+    values.push(updates.ai_followups_answered);
   }
   if (updates.feedback_rating !== undefined) {
     updateFields.push('feedback_rating = ?');
@@ -675,6 +534,7 @@ export async function updateReflection(
 
 /**
  * Get all sessions for a Practice Area with joined reflection data
+ * UPDATED for v2.0: Returns coaching_tone instead of format
  * @param practiceAreaId - The ID of the practice area
  * @param sortOrder - Sort order: 'asc' for oldest first, 'desc' for newest first (default)
  * @returns Array of sessions with reflection data
@@ -688,7 +548,8 @@ export async function getSeriesSessions(
 
   const results = await db.getAllAsync<any>(
     `SELECT s.*, 
-            r.format, 
+            r.coaching_tone, 
+            r.ai_assisted,
             r.feedback_rating, 
             r.updated_at as reflection_updated_at,
             r.completed_at as reflection_completed_at
@@ -705,17 +566,22 @@ export async function getSeriesSessions(
 
 /**
  * Extended session type with full reflection data for Session Detail modal
+ * UPDATED for v2.0: Includes AI fields
  */
 export interface SessionWithFullReflection extends SessionWithReflection {
   step2_answer: string | null;
   step3_answer: string | null;
   step4_answer: string | null;
+  ai_placeholders_shown: number | null;
+  ai_followups_shown: number | null;
+  ai_followups_answered: number | null;
   feedback_note: string | null;
 }
 
 /**
  * Get a session with full reflection data by session ID
  * Used for Session Detail modal to display complete reflection content
+ * UPDATED for v2.0: Includes coaching_tone and AI fields
  * @param sessionId - The ID of the session
  * @returns Session with full reflection data or null if not found
  */
@@ -726,13 +592,17 @@ export async function getSessionWithFullReflection(
 
   const result = await db.getFirstAsync<any>(
     `SELECT s.*, 
-            r.format, 
+            r.coaching_tone, 
+            r.ai_assisted,
             r.feedback_rating, 
             r.updated_at as reflection_updated_at,
             r.completed_at as reflection_completed_at,
             r.step2_answer,
             r.step3_answer,
             r.step4_answer,
+            r.ai_placeholders_shown,
+            r.ai_followups_shown,
+            r.ai_followups_answered,
             r.feedback_note
      FROM sessions s
      LEFT JOIN reflections r ON r.session_id = s.id
@@ -845,6 +715,7 @@ export async function getBlockingUnreflectedSession(
  * Get all data for export (Practice Areas with Sessions and Reflections)
  * Returns all non-deleted practice areas with their sessions and reflections
  * Used by exportService to generate JSON export
+ * UPDATED for v2.0: Includes type field and coaching_tone/AI fields
  * @returns Array of practice areas with nested sessions and reflections
  */
 export async function getExportData(): Promise<any[]> {
@@ -852,7 +723,7 @@ export async function getExportData(): Promise<any[]> {
 
   // Get all non-deleted practice areas ordered by created_at ASC
   const practiceAreas = await db.getAllAsync<any>(
-    `SELECT id, name, created_at
+    `SELECT id, name, type, created_at
      FROM practice_areas
      WHERE is_deleted = 0
      ORDER BY created_at ASC`
@@ -864,7 +735,9 @@ export async function getExportData(): Promise<any[]> {
     const sessions = await db.getAllAsync<any>(
       `SELECT s.id, s.previous_session_id, s.intent, s.started_at, s.ended_at, 
               s.target_duration_seconds,
-              r.format, r.step2_answer, r.step3_answer, r.step4_answer,
+              r.coaching_tone, r.ai_assisted,
+              r.step2_answer, r.step3_answer, r.step4_answer,
+              r.ai_placeholders_shown, r.ai_followups_shown, r.ai_followups_answered,
               r.feedback_rating, r.feedback_note, r.completed_at, r.updated_at
        FROM sessions s
        LEFT JOIN reflections r ON r.session_id = s.id
@@ -881,4 +754,3 @@ export async function getExportData(): Promise<any[]> {
 
   return result;
 }
-

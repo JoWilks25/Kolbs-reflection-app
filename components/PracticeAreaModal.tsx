@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
+import { Picker } from '@react-native-picker/picker';
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { PracticeArea } from "../utils";
 
@@ -85,6 +86,10 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
     }
   };
 
+  const setType = (itemValue: string) => {
+    console.log('hit', itemValue)
+  }
+
   return (
     <Modal
       visible={visible}
@@ -120,6 +125,18 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
           </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <Picker
+            selectedValue={'solo_skill'}
+            onValueChange={(itemValue) => setType(itemValue)}
+            style={styles.picker}
+            itemStyle={styles.pickerItem}
+          >
+            <Picker.Item label="Solo Skill - Technical practice, measurable progress" value="solo_skill" />
+            <Picker.Item label="Performance - Execution under pressure, audience awareness" value="performance" />
+            <Picker.Item label="Interpersonal - Communication, emotional dynamics" value="interpersonal" />
+            <Picker.Item label="Creative - Exploration, experimentation, non-linear discovery" value="creative" />
+          </Picker>
 
           <View style={styles.modalButtons}>
             <TouchableOpacity
@@ -249,6 +266,19 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.inverse,
+  },
+  picker: {
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.neutral[300],
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
+    overflow: 'hidden',
+  },
+  pickerItem: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.primary,
   },
 });
 
