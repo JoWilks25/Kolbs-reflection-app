@@ -6,10 +6,13 @@ import { THEME } from "./utils/constants";
 import { getPracticeAreas } from "./db/queries";
 import { setupNotifications } from "./services/notificationService";
 import { cleanupOrphanedDrafts } from "./utils/draftCleanup";
+import { checkAIAvailability } from "./services/aiService";
+import { useAppStore } from "./stores/appStore";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const setAiAvailable = useAppStore((state) => state.setAiAvailable);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -31,6 +34,18 @@ export default function App() {
           console.warn('Notification setup failed, continuing without notifications:', notificationError);
         }
 
+        // Check AI availability (non-blocking - app works without AI)
+        try {
+          const aiAvailable = await checkAIAvailability();
+          setAiAvailable(aiAvailable);
+          if (!aiAvailable) {
+            console.log('AI features unavailable - running in tones-only mode');
+          }
+        } catch (aiError) {
+          console.warn('AI availability check failed, continuing without AI:', aiError);
+          setAiAvailable(false);
+        }
+
         setIsLoading(false);
       } catch (err) {
         console.error('Failed to initialize app:', err);
@@ -40,7 +55,7 @@ export default function App() {
     };
 
     initializeApp();
-  }, []);
+  }, [setAiAvailable]);
 
   if (isLoading) {
     return (
