@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { Picker } from '@react-native-picker/picker';
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { PracticeArea } from "../utils";
 
@@ -33,12 +32,40 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
 }) => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [type, setType] = useState('solo_skill');
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Practice area type definitions
+  const practiceAreaTypes = [
+    {
+      value: 'solo_skill',
+      label: 'Solo Skill',
+      description: 'Technical practice, measurable progress'
+    },
+    {
+      value: 'performance',
+      label: 'Performance',
+      description: 'Execution under pressure, audience awareness'
+    },
+    {
+      value: 'interpersonal',
+      label: 'Interpersonal',
+      description: 'Communication, emotional dynamics'
+    },
+    {
+      value: 'creative',
+      label: 'Creative',
+      description: 'Exploration, experimentation, non-linear discovery'
+    },
+  ];
 
   // Reset state when modal closes
   useEffect(() => {
     if (!visible) {
       setName("");
       setError("");
+      setType('solo_skill');
+      setPickerOpen(false);
     }
   }, [visible]);
 
@@ -86,9 +113,6 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
     }
   };
 
-  const setType = (itemValue: string) => {
-    console.log('hit', itemValue)
-  }
 
   return (
     <Modal
@@ -126,17 +150,26 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <Picker
-            selectedValue={'solo_skill'}
-            onValueChange={(itemValue) => setType(itemValue)}
-            style={styles.picker}
-            itemStyle={styles.pickerItem}
-          >
-            <Picker.Item label="Solo Skill - Technical practice, measurable progress" value="solo_skill" />
-            <Picker.Item label="Performance - Execution under pressure, audience awareness" value="performance" />
-            <Picker.Item label="Interpersonal - Communication, emotional dynamics" value="interpersonal" />
-            <Picker.Item label="Creative - Exploration, experimentation, non-linear discovery" value="creative" />
-          </Picker>
+          <View style={styles.pickerSection}>
+            <Text style={styles.pickerLabel}>Practice Area Type</Text>
+            <TouchableOpacity
+              style={styles.pickerButton}
+              onPress={() => setPickerOpen(true)}
+              disabled={isLoading}
+            >
+              <View style={styles.pickerButtonContent}>
+                <View style={styles.pickerButtonTextContainer}>
+                  <Text style={styles.pickerButtonLabel}>
+                    {practiceAreaTypes.find(t => t.value === type)?.label}
+                  </Text>
+                  <Text style={styles.pickerButtonDescription} numberOfLines={1}>
+                    {practiceAreaTypes.find(t => t.value === type)?.description}
+                  </Text>
+                </View>
+                <Text style={styles.pickerChevron}>▼</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.modalButtons}>
             <TouchableOpacity
@@ -162,6 +195,58 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
           </View>
         </View>
       </View>
+
+      {/* Custom Picker Modal */}
+      <Modal
+        visible={pickerOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.pickerModalOverlay}
+          activeOpacity={1}
+          onPress={() => setPickerOpen(false)}
+        >
+          <View
+            style={styles.pickerModalContent}
+            onStartShouldSetResponder={() => true}
+          >
+            <Text style={styles.pickerModalTitle}>Select Practice Area Type</Text>
+            {practiceAreaTypes.map((item) => (
+              <TouchableOpacity
+                key={item.value}
+                style={[
+                  styles.pickerOption,
+                  type === item.value && styles.pickerOptionSelected,
+                ]}
+                onPress={() => {
+                  setType(item.value);
+                  setPickerOpen(false);
+                }}
+              >
+                <View style={styles.pickerOptionContent}>
+                  <Text style={[
+                    styles.pickerOptionLabel,
+                    type === item.value && styles.pickerOptionLabelSelected,
+                  ]}>
+                    {item.label}
+                  </Text>
+                  <Text style={[
+                    styles.pickerOptionDescription,
+                    type === item.value && styles.pickerOptionDescriptionSelected,
+                  ]}>
+                    {item.description}
+                  </Text>
+                </View>
+                {type === item.value && (
+                  <Text style={styles.pickerCheckmark}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Modal>
   );
 };
@@ -267,18 +352,109 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.inverse,
   },
-  picker: {
+  pickerSection: {
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  pickerLabel: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: COLORS.text.secondary,
+    marginBottom: SPACING.xs,
+  },
+  pickerButton: {
     backgroundColor: COLORS.background,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.neutral[300],
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-    overflow: 'hidden',
+    padding: SPACING.md,
   },
-  pickerItem: {
+  pickerButtonContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pickerButtonTextContainer: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  pickerButtonLabel: {
     fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     color: COLORS.text.primary,
+    marginBottom: SPACING.xs / 2,
+  },
+  pickerButtonDescription: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+  },
+  pickerChevron: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+  },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  pickerModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: SPACING.md,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  pickerModalTitle: {
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: 8,
+    marginBottom: SPACING.xs,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  pickerOptionSelected: {
+    backgroundColor: 'rgba(90, 159, 212, 0.15)', // 15% opacity of primary color
+    borderColor: COLORS.primary,
+  },
+  pickerOptionContent: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  pickerOptionLabel: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.xs / 2,
+  },
+  pickerOptionLabelSelected: {
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  pickerOptionDescription: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.fontSize.sm * TYPOGRAPHY.lineHeight.normal,
+  },
+  pickerOptionDescriptionSelected: {
+    color: COLORS.text.primary,
+  },
+  pickerCheckmark: {
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
   },
 });
 
