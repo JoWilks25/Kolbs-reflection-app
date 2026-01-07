@@ -1,8 +1,8 @@
 /**
- * Zustand store for Kolb's Reflection Cycle App
+ * Zustand store for Kolb's Reflection Cycle App v2.0
  * 
  * Central state management following the tech spec (Section 3.1)
- * Manages: Practice Areas, Sessions, Reflection Drafts, UI State
+ * Manages: Practice Areas, Sessions, Reflection Drafts, AI State, UI State
  */
 
 import { create } from 'zustand';
@@ -10,7 +10,7 @@ import type {
   AppStore,
   PracticeAreaWithStats,
   Session,
-  ReflectionFormat,
+  CoachingTone,
   ReflectionDraft,
 } from '../utils/types';
 
@@ -18,10 +18,14 @@ import type {
  * Initial state for reflection draft
  */
 const initialReflectionDraft: ReflectionDraft = {
-  format: null,
+  coachingTone: null,
+  aiAssisted: false,
   step2: '',
   step3: '',
   step4: '',
+  aiPlaceholdersShown: 0,
+  aiFollowupsShown: 0,
+  aiFollowupsAnswered: 0,
   feedbackRating: null,
   feedbackNote: '',
 };
@@ -57,6 +61,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // Reflection Draft State
   // ============================================================================
   reflectionDraft: { ...initialReflectionDraft },
+
+  // ============================================================================
+  // AI State
+  // ============================================================================
+  aiAvailable: false,
+  aiEnabled: true,
 
   // ============================================================================
   // UI State
@@ -145,15 +155,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
   clearLastEndedSession: () => set({ lastEndedSessionId: null }),
 
   // ============================================================================
+  // AI Actions
+  // ============================================================================
+
+  /**
+   * Set whether AI (Apple Intelligence) is available on this device
+   */
+  setAiAvailable: (available: boolean) => set({ aiAvailable: available }),
+
+  /**
+   * Set whether AI is enabled for the current session (user toggle)
+   */
+  setAiEnabled: (enabled: boolean) => set({ aiEnabled: enabled }),
+
+  // ============================================================================
   // Reflection Draft Actions
   // ============================================================================
 
   /**
-   * Set the reflection format (Direct=1, Reflective=2, Minimalist=3)
+   * Set the coaching tone (Facilitative=1, Socratic=2, Supportive=3)
    */
-  setReflectionFormat: (format: ReflectionFormat) =>
+  setCoachingTone: (tone: CoachingTone) =>
     set((state) => ({
-      reflectionDraft: { ...state.reflectionDraft, format },
+      reflectionDraft: { ...state.reflectionDraft, coachingTone: tone },
     })),
 
   /**
@@ -167,6 +191,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
   ) =>
     set((state) => ({
       reflectionDraft: { ...state.reflectionDraft, [field]: value },
+    })),
+
+  /**
+   * Increment an AI interaction metric counter
+   * @param metric - The metric to increment (aiPlaceholdersShown, aiFollowupsShown, aiFollowupsAnswered)
+   */
+  incrementAiMetric: (metric: 'aiPlaceholdersShown' | 'aiFollowupsShown' | 'aiFollowupsAnswered') =>
+    set((state) => ({
+      reflectionDraft: {
+        ...state.reflectionDraft,
+        [metric]: state.reflectionDraft[metric] + 1,
+      },
     })),
 
   /**

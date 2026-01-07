@@ -1,7 +1,13 @@
 /**
- * TypeScript type definitions for Kolb's Reflection Cycle App
+ * TypeScript type definitions for Kolb's Reflection Cycle App v2.0
  * 
  * These types match the database schema defined in db/schema.ts
+ * 
+ * v2.0 Changes:
+ * - Added PracticeAreaType and PRACTICE_AREA_TYPES constants
+ * - Renamed ReflectionFormat to CoachingTone (1=Facilitative, 2=Socratic, 3=Supportive)
+ * - Added AI-related fields to Reflection and ReflectionDraft
+ * - Added AI state to AppState
  */
 
 // ============================================================================
@@ -9,11 +15,30 @@
 // ============================================================================
 
 /**
+ * Practice Area Type - Classification for AI adaptation
+ * NEW in v2.0
+ */
+export type PracticeAreaType = 'solo_skill' | 'performance' | 'interpersonal' | 'creative';
+
+/**
+ * Practice Area Type definitions with labels and descriptions
+ * NEW in v2.0
+ */
+export const PRACTICE_AREA_TYPES = [
+  { value: 'solo_skill' as const, label: 'Solo Skill', description: 'Technical practice, measurable progress' },
+  { value: 'performance' as const, label: 'Performance', description: 'Execution under pressure, audience awareness' },
+  { value: 'interpersonal' as const, label: 'Interpersonal', description: 'Communication, emotional dynamics' },
+  { value: 'creative' as const, label: 'Creative', description: 'Exploration, experimentation, non-linear discovery' },
+];
+
+/**
  * Practice Area - A domain of practice (e.g., "Piano", "Public Speaking")
+ * UPDATED in v2.0: Added type field
  */
 export interface PracticeArea {
   id: string;
   name: string;
+  type: PracticeAreaType;  // NEW in v2.0
   created_at: number;  // Unix timestamp in milliseconds
   is_deleted: number;  // 0 = active, 1 = deleted (soft delete)
 }
@@ -32,6 +57,7 @@ export interface PracticeAreaWithStats extends PracticeArea {
 
 /**
  * Session - A single practice session within a Practice Area
+ * Unchanged from v1
  */
 export interface Session {
   id: string;
@@ -54,10 +80,11 @@ export interface PendingReflection extends Session {
 
 /**
  * Session with joined reflection data - Used for Series Timeline view
- * Extends Session with reflection fields from LEFT JOIN
+ * UPDATED in v2.0: Renamed format to coaching_tone, added AI fields
  */
 export interface SessionWithReflection extends Session {
-  format: ReflectionFormat | null;
+  coaching_tone: CoachingTone | null;  // RENAMED from format
+  ai_assisted: number | null;  // NEW: 0=off, 1=on
   feedback_rating: FeedbackRating | null;
   reflection_updated_at: number | null;
   reflection_completed_at: number | null;
@@ -65,14 +92,23 @@ export interface SessionWithReflection extends Session {
 
 /**
  * Reflection - A completed reflection for a session
+ * UPDATED in v2.0: Renamed format to coaching_tone, added AI fields
  */
 export interface Reflection {
   id: string;
   session_id: string;
-  format: ReflectionFormat;
+  coaching_tone: CoachingTone;  // RENAMED from format
+  ai_assisted: number;  // NEW: 0=off, 1=on
   step2_answer: string;  // "What happened?"
   step3_answer: string;  // "Lesson/pattern"
   step4_answer: string;  // "Next action"
+
+  // AI interaction metrics (NEW in v2.0)
+  ai_placeholders_shown: number;
+  ai_followups_shown: number;
+  ai_followups_answered: number;
+
+  // Feedback
   feedback_rating: FeedbackRating;
   feedback_note: string | null;
   completed_at: number;  // Unix timestamp in milliseconds
@@ -84,12 +120,12 @@ export interface Reflection {
 // ============================================================================
 
 /**
- * Reflection format types:
- * 1 = Direct & Action-Oriented
- * 2 = Reflective & Exploratory
- * 3 = Minimalist / Rapid
+ * Coaching Tone types (RENAMED from ReflectionFormat in v2.0):
+ * 1 = Facilitative (guided discovery)
+ * 2 = Socratic (structured inquiry)
+ * 3 = Supportive (encouraging)
  */
-export type ReflectionFormat = 1 | 2 | 3;
+export type CoachingTone = 1 | 2 | 3;
 
 /**
  * Feedback rating scale:
@@ -105,12 +141,20 @@ export type FeedbackRating = 0 | 1 | 2 | 3 | 4 | null;
 /**
  * Reflection draft state for in-progress reflections
  * Used in Zustand store to track reflection being composed
+ * UPDATED in v2.0: Renamed format to coachingTone, added AI fields
  */
 export interface ReflectionDraft {
-  format: ReflectionFormat | null;
+  coachingTone: CoachingTone | null;  // RENAMED from format
+  aiAssisted: boolean;  // NEW: Was AI enabled for this reflection?
   step2: string;
   step3: string;
   step4: string;
+
+  // AI interaction tracking (NEW in v2.0)
+  aiPlaceholdersShown: number;
+  aiFollowupsShown: number;
+  aiFollowupsAnswered: number;
+
   feedbackRating: FeedbackRating;
   feedbackNote: string;
 }
@@ -121,6 +165,7 @@ export interface ReflectionDraft {
 
 /**
  * Complete app state shape for Zustand store
+ * UPDATED in v2.0: Added AI capability state
  */
 export interface AppState {
   // Practice Area state
@@ -135,6 +180,10 @@ export interface AppState {
   targetReached: boolean;  // Flag when target duration is hit
   lastEndedSessionId: string | null;  // ID of last ended session for reflection flow
 
+  // AI capability state (NEW in v2.0)
+  aiAvailable: boolean;  // Is Apple Intelligence available on this device?
+  aiEnabled: boolean;  // User's per-session AI toggle (default ON)
+
   // Reflection draft state
   reflectionDraft: ReflectionDraft;
 
@@ -145,6 +194,7 @@ export interface AppState {
 
 /**
  * App store actions
+ * UPDATED in v2.0: Added AI actions, renamed format to coaching tone
  */
 export interface AppActions {
   // Practice Area actions
@@ -158,12 +208,17 @@ export interface AppActions {
   setLastEndedSessionId: (sessionId: string | null) => void;
   clearLastEndedSession: () => void;
 
-  // Reflection draft actions
-  setReflectionFormat: (format: ReflectionFormat) => void;
+  // AI actions (NEW in v2.0)
+  setAiAvailable: (available: boolean) => void;
+  setAiEnabled: (enabled: boolean) => void;
+
+  // Reflection draft actions (UPDATED in v2.0)
+  setCoachingTone: (tone: CoachingTone) => void;  // RENAMED from setReflectionFormat
   updateReflectionDraft: <K extends keyof ReflectionDraft>(
     field: K,
     value: ReflectionDraft[K]
   ) => void;
+  incrementAiMetric: (metric: 'aiPlaceholdersShown' | 'aiFollowupsShown' | 'aiFollowupsAnswered') => void;  // NEW
   clearReflectionDraft: () => void;
 
   // UI actions
@@ -181,54 +236,81 @@ export type AppStore = AppState & AppActions;
 // ============================================================================
 
 /**
- * Exported reflection data with computed isedited flag
- * Field names use lowercase without underscores per export spec
+ * Exported reflection data with human-readable labels and descriptive field names
+ * Uses snake_case for consistency with database schema and better LLM analysis compatibility
+ * Optimized for pattern analysis with AI tools (ChatGPT, Claude, etc.)
+ * UPDATED in v2.0: Renamed format to coaching_tone, added AI fields, descriptive Kolb step names
  */
 export interface ExportReflection {
-  format: number;
-  step2answer: string;
-  step3answer: string;
-  step4answer: string;
-  feedbackrating: number | null;
-  feedbacknote: string | null;
-  completedat: number;
-  updatedat: number | null;
-  isedited: boolean;
+  coaching_tone: number;  // 1=Facilitative, 2=Socratic, 3=Supportive
+  coaching_tone_name: string;  // Human-readable: "Facilitative", "Socratic", "Supportive"
+  ai_assisted: boolean;
+
+  // AI interaction metrics
+  ai_placeholders_shown: number;
+  ai_followups_shown: number;
+  ai_followups_answered: number;
+
+  // Kolb reflection answers (descriptive names for better LLM understanding)
+  what_happened: string;      // Step 2: What actually happened during practice?
+  lessons_learned: string;    // Step 3: What insight, pattern, or lesson emerged?
+  next_actions: string;       // Step 4: What will you try or do differently next time?
+
+  // Feedback on reflection experience
+  feedback_rating: number | null;  // 0=Confusing, 1=Hard, 2=Neutral, 3=Good, 4=Great, null=skipped
+  feedback_rating_label: string | null;  // Human-readable: "Great/Energizing", etc.
+  feedback_note: string | null;
+
+  // Timestamps
+  completed_at: number;  // Unix timestamp in milliseconds
+  updated_at: number | null;  // null if never edited
+  is_edited: boolean;
 }
 
 /**
  * Exported session data with computed duration fields
- * Field names use lowercase without underscores per export spec
+ * Uses snake_case for database alignment and cross-language compatibility
  */
 export interface ExportSession {
   id: string;
-  previoussessionid: string | null;
+  previous_session_id: string | null;
   intent: string;
-  startedat: number;
-  endedat: number | null;
-  targetdurationseconds: number | null;
-  actualdurationseconds: number | null;
-  mettarget: boolean | null;
+  started_at: number;  // Unix timestamp in milliseconds
+  ended_at: number | null;
+
+  // Duration tracking
+  target_duration_seconds: number | null;
+  actual_duration_seconds: number | null;
+  met_target: boolean | null;
+
   reflection: ExportReflection | null;
 }
 
 /**
- * Exported practice area with sessions array
- * Field names use lowercase without underscores per export spec
+ * Exported practice area with sessions array and type classification
+ * UPDATED in v2.0: Added type and type_label fields
  */
 export interface ExportPracticeArea {
   id: string;
   name: string;
-  createdat: number;
+  type: PracticeAreaType;  // 'solo_skill', 'performance', 'interpersonal', 'creative'
+  type_label: string;  // Human-readable: "Solo Skill", "Performance", etc.
+  created_at: number;  // Unix timestamp in milliseconds
   sessions: ExportSession[];
 }
 
 /**
- * Top-level export payload structure
- * Field names use lowercase without underscores per export spec
+ * Top-level export payload structure with metadata
+ * Optimized for LLM analysis - includes summary statistics and human-readable labels
+ * UPDATED in v2.0: Added metadata object, app_version field
  */
 export interface ExportPayload {
-  exportdate: string;
-  practiceareas: ExportPracticeArea[];
+  metadata: {
+    export_date: string;  // ISO 8601 timestamp
+    app_version: string;  // "2.0"
+    total_practice_areas: number;
+    total_sessions: number;
+    total_reflections: number;
+  };
+  practice_areas: ExportPracticeArea[];
 }
-

@@ -29,7 +29,7 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
     );
 
     const tableNames = tables.map(t => t.name);
-    const requiredTables = ['practice_areas', 'sessions', 'reflections'];
+    const requiredTables = ['practiceareas', 'sessions', 'reflections'];
     const tablesExist = requiredTables.every(table => tableNames.includes(table));
 
     // Only run schema if tables don't exist
@@ -72,3 +72,33 @@ export async function closeDatabase(): Promise<void> {
   }
 }
 
+/**
+ * Drop all tables from the database
+ * WARNING: This will permanently delete all data!
+ * Use only for development/testing purposes.
+ */
+export async function dropAllTables(): Promise<void> {
+  const db = getDatabase();
+
+  try {
+    console.log('⚠️  Dropping all tables...');
+
+    // Disable foreign key constraints temporarily
+    await db.execAsync('PRAGMA foreign_keys = OFF');
+
+    // Drop all tables in reverse order of dependencies
+    await db.execAsync(`
+      DROP TABLE IF EXISTS reflections;
+      DROP TABLE IF EXISTS sessions;
+      DROP TABLE IF EXISTS practice_areas;
+    `);
+
+    // Re-enable foreign key constraints
+    await db.execAsync('PRAGMA foreign_keys = ON');
+
+    console.log('✅ All tables dropped successfully');
+  } catch (error) {
+    console.error('❌ Error dropping tables:', error);
+    throw error;
+  }
+}
