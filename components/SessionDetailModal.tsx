@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
-import { SessionWithReflection, ReflectionFormat, FeedbackRating } from "../utils/types";
+import { SessionWithReflection, CoachingTone, FeedbackRating } from "../utils/types";
 import { getSessionWithFullReflection, SessionWithFullReflection } from "../db/queries";
 import { getReflectionState, getReflectionBadge, ReflectionState } from "../services/reflectionStateService";
 import { formatDateTime } from "../utils/timeFormatting";
@@ -27,16 +27,16 @@ export interface SessionDetailModalProps {
   onDeleteSession: (sessionId: string) => void;
 }
 
-// Format labels for reflection format
-const getFormatLabel = (format: ReflectionFormat | null): string | null => {
-  if (format === null) return null;
-  switch (format) {
+// Coaching tone labels
+const getToneLabel = (tone: CoachingTone | null): string | null => {
+  if (tone === null) return null;
+  switch (tone) {
     case 1:
-      return "Direct & Action-Oriented";
+      return "Facilitative – Guided Discovery";
     case 2:
-      return "Reflective & Exploratory";
+      return "Socratic – Structured Inquiry";
     case 3:
-      return "Minimalist / Rapid";
+      return "Supportive – Encouraging";
     default:
       return null;
   }
@@ -121,9 +121,13 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
   const reflectionState = getReflectionState(session, session.reflection_completed_at ? {
     id: '',
     session_id: session.id,
-    format: session.format!,
+    coaching_tone: session.coaching_tone!,
+    ai_assisted: session.ai_assisted || 0,
     step2_answer: '',
     step3_answer: '',
+    ai_placeholders_shown: 0,
+    ai_followups_shown: 0,
+    ai_followups_answered: 0,
     step4_answer: '',
     feedback_rating: session.feedback_rating,
     feedback_note: null,
@@ -137,8 +141,8 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
   const canEdit = reflectionState.status === 'completed' && reflectionState.canEdit;
   const isEdited = reflectionState.status === 'completed' && reflectionState.isEdited;
 
-  // Format label
-  const formatLabel = getFormatLabel(session.format);
+  // Coaching tone label
+  const toneLabel = getToneLabel(session.coaching_tone);
 
   // Feedback display
   const feedbackDisplay = getFeedbackDisplay(session.feedback_rating);
@@ -254,9 +258,9 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
 
                 {/* Format and timestamps */}
                 <View style={styles.reflectionMeta}>
-                  {formatLabel && (
-                    <View style={styles.formatBadge}>
-                      <Text style={styles.formatBadgeText}>{formatLabel}</Text>
+                  {toneLabel && (
+                    <View style={styles.toneBadge}>
+                      <Text style={styles.toneBadgeText}>{toneLabel}</Text>
                     </View>
                   )}
                   {isEdited && (
@@ -540,13 +544,13 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     marginBottom: SPACING.md,
   },
-  formatBadge: {
+  toneBadge: {
     backgroundColor: COLORS.secondary,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs / 2,
     borderRadius: 8,
   },
-  formatBadgeText: {
+  toneBadgeText: {
     fontSize: TYPOGRAPHY.fontSize.xs,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
     color: COLORS.text.inverse,

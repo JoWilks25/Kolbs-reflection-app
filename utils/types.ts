@@ -213,7 +213,7 @@ export interface AppActions {
   setAiEnabled: (enabled: boolean) => void;
 
   // Reflection draft actions (UPDATED in v2.0)
-  setCoachingTone: (tone: CoachingTone) => void;  // RENAMED from setReflectionFormat
+  setCoachingTone: (tone: CoachingTone, aiEnabled?: boolean) => void;  // RENAMED from setReflectionFormat
   updateReflectionDraft: <K extends keyof ReflectionDraft>(
     field: K,
     value: ReflectionDraft[K]

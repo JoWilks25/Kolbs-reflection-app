@@ -13,7 +13,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
-import { SessionWithReflection, ReflectionFormat, FeedbackRating } from "../utils/types";
+import { SessionWithReflection, CoachingTone, FeedbackRating } from "../utils/types";
 import { getSeriesSessions, getPracticeAreaById, deleteSession, moveSessionToPracticeArea } from "../db/queries";
 import { getReflectionState, getReflectionBadge } from "../services/reflectionStateService";
 import { formatDateTime } from "../utils/timeFormatting";
@@ -35,16 +35,16 @@ type Props = {
   route: SeriesTimelineScreenRouteProp;
 };
 
-// Format badge labels
-const getFormatLabel = (format: ReflectionFormat | null): string | null => {
-  if (format === null) return null;
-  switch (format) {
+// Coaching tone badge labels
+const getToneLabel = (tone: CoachingTone | null): string | null => {
+  if (tone === null) return null;
+  switch (tone) {
     case 1:
-      return "Direct";
+      return "Facilitative";
     case 2:
-      return "Reflective";
+      return "Socratic";
     case 3:
-      return "Minimalist";
+      return "Supportive";
     default:
       return null;
   }
@@ -80,17 +80,21 @@ const SessionCard = React.memo<{
   const targetMinutes = hasTarget ? Math.round(item.target_duration_seconds! / 60) : null;
   const targetMet = hasTarget && durationMinutes !== null && durationMinutes >= targetMinutes!;
 
-  // Format label
-  const formatLabel = getFormatLabel(item.format);
+  // Coaching tone label
+  const toneLabel = getToneLabel(item.coaching_tone);
 
   // Reflection state
   const reflectionState = getReflectionState(item, item.reflection_completed_at ? {
     id: '',
     session_id: item.id,
-    format: item.format!,
+    coaching_tone: item.coaching_tone!,
+    ai_assisted: item.ai_assisted || 0,
     step2_answer: '',
     step3_answer: '',
     step4_answer: '',
+    ai_placeholders_shown: 0,
+    ai_followups_shown: 0,
+    ai_followups_answered: 0,
     feedback_rating: item.feedback_rating,
     feedback_note: null,
     completed_at: item.reflection_completed_at!,
@@ -136,10 +140,10 @@ const SessionCard = React.memo<{
           </View>
         )}
 
-        {/* Format Badge */}
-        {formatLabel && (
-          <View style={[styles.badge, styles.formatBadge]}>
-            <Text style={styles.badgeText}>{formatLabel}</Text>
+        {/* Coaching Tone Badge */}
+        {toneLabel && (
+          <View style={[styles.badge, styles.toneBadge]}>
+            <Text style={styles.badgeText}>{toneLabel}</Text>
           </View>
         )}
 
@@ -172,7 +176,7 @@ const SessionCard = React.memo<{
 
 const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
   const { practiceAreaId, focusSessionId } = route.params;
-  const { setReflectionFormat, clearReflectionDraft, setLastEndedSessionId } = useAppStore();
+  const { setCoachingTone, clearReflectionDraft, setLastEndedSessionId } = useAppStore();
   
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [sessions, setSessions] = useState<SessionWithReflection[]>([]);
@@ -235,21 +239,21 @@ const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
   // Handle Edit Reflection - navigate to ReflectionPromptsScreen in edit mode
   const handleEditReflection = (sessionId: string) => {
     handleCloseModal();
-    // Load the existing reflection format into the store before navigating
+    // Load the existing coaching tone into the store before navigating
     const session = sessions.find(s => s.id === sessionId);
-    if (session?.format) {
-      setReflectionFormat(session.format);
+    if (session?.coaching_tone) {
+      setCoachingTone(session.coaching_tone);
     }
     navigation.navigate("ReflectionPrompts", { sessionId, editMode: true });
   };
 
-  // Handle Complete Reflection - navigate to ReflectionFormatScreen
+  // Handle Complete Reflection - navigate to ReflectionToneScreen
   const handleCompleteReflection = (sessionId: string) => {
     handleCloseModal();
     // Clear any existing draft and set the session ID for reflection flow
     clearReflectionDraft();
     setLastEndedSessionId(sessionId);
-    navigation.navigate("ReflectionFormat");
+    navigation.navigate("ReflectionTone");
   };
 
   // Handle Move Session
@@ -520,7 +524,7 @@ const styles = StyleSheet.create({
   targetBadge: {
     backgroundColor: COLORS.neutral[500],
   },
-  formatBadge: {
+  toneBadge: {
     backgroundColor: COLORS.secondary,
   },
   feedbackBadge: {

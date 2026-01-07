@@ -94,10 +94,14 @@ const ReflectionFeedbackScreen: React.FC = () => {
       const payload = {
         id: existingReflection?.id || generateId(),
         session_id: sessionId,
-        format: reflectionDraft.format!,
+        coaching_tone: reflectionDraft.coachingTone!,
+        ai_assisted: reflectionDraft.aiAssisted ? 1 : 0,
         step2_answer: reflectionDraft.step2,
         step3_answer: reflectionDraft.step3,
         step4_answer: reflectionDraft.step4,
+        ai_placeholders_shown: reflectionDraft.aiPlaceholdersShown,
+        ai_followups_shown: reflectionDraft.aiFollowupsShown,
+        ai_followups_answered: reflectionDraft.aiFollowupsAnswered,
         feedback_rating: reflectionDraft.feedbackRating,
         feedback_note: reflectionDraft.feedbackNote || null,
       };
@@ -105,10 +109,14 @@ const ReflectionFeedbackScreen: React.FC = () => {
       // 3. INSERT or UPDATE
       if (existingReflection) {
         await updateReflection(sessionId, {
-          format: payload.format,
+          coaching_tone: payload.coaching_tone,
+          ai_assisted: payload.ai_assisted,
           step2_answer: payload.step2_answer,
           step3_answer: payload.step3_answer,
           step4_answer: payload.step4_answer,
+          ai_placeholders_shown: payload.ai_placeholders_shown,
+          ai_followups_shown: payload.ai_followups_shown,
+          ai_followups_answered: payload.ai_followups_answered,
           feedback_rating: payload.feedback_rating,
           feedback_note: payload.feedback_note,
           updated_at: Date.now(),
