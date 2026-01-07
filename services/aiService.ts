@@ -70,9 +70,9 @@ export const generatePlaceholder = async (
     const startTime = Date.now();
 
     const result = await generateText({
-      model: apple(),
+      model: apple() as any, // Type assertion to work around dependency version mismatch
       prompt,
-      maxTokens: 50, // Short placeholder
+      maxOutputTokens: 50, // Changed from maxTokens to maxOutputTokens
       temperature: 0.7,
     });
 
@@ -115,9 +115,9 @@ export const generateFollowup = async (
     const startTime = Date.now();
 
     const result = await generateText({
-      model: apple(),
+      model: apple() as any, // Type assertion to work around dependency version mismatch
       prompt,
-      maxTokens: 100,
+      maxOutputTokens: 100, // Changed from maxTokens to maxOutputTokens
       temperature: 0.8,
     });
 
@@ -132,4 +132,3 @@ export const generateFollowup = async (
     return null;
   }
 };
-
