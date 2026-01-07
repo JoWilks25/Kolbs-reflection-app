@@ -17,8 +17,8 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { useAppStore } from "../stores/appStore";
 import { getSessionById, getPracticeAreaById, getReflectionBySessionId } from "../db/queries";
-import { COLORS, SPACING, TYPOGRAPHY, APP_CONSTANTS } from "../utils/constants";
-import type { ReflectionFormat } from "../utils/types";
+import { COLORS, SPACING, TYPOGRAPHY, APP_CONSTANTS, TONE_PROMPTS } from "../utils/constants";
+import type { CoachingTone } from "../utils/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from "react-native-toast-message";
 
@@ -32,33 +32,11 @@ type ReflectionPromptsScreenRouteProp = RouteProp<
   "ReflectionPrompts"
 >;
 
-// Format-specific prompts matching tech spec
-const PROMPTS: Record<ReflectionFormat, { step2: string; step3: string; step4: string }> = {
-  1: {
-    // Direct & Action-Oriented
-    step2: "What actually happened?",
-    step3: "What's the main lesson or pattern?",
-    step4: "What will you try/do differently next time?",
-  },
-  2: {
-    // Reflective & Exploratory
-    step2: "What happened, and what stood out?",
-    step3: "What insight, pattern, or assumption did you notice?",
-    step4: "What will you experiment with next time?",
-  },
-  3: {
-    // Minimalist / Rapid
-    step2: "Key event",
-    step3: "Main takeaway",
-    step4: "Next micro-action",
-  },
-};
-
 // AsyncStorage helper functions for draft persistence
 const saveDraftToStorage = async (
   sessionId: string,
   draft: {
-    format: ReflectionFormat | null;
+    coachingTone: CoachingTone | null;
     step2: string;
     step3: string;
     step4: string;
@@ -121,7 +99,7 @@ const ReflectionPromptsScreen: React.FC = () => {
     lastEndedSessionId,
     reflectionDraft,
     updateReflectionDraft,
-    setReflectionFormat,
+    setCoachingTone,
   } = useAppStore();
 
   const [practiceAreaName, setPracticeAreaName] = useState<string>("");
@@ -152,11 +130,11 @@ const ReflectionPromptsScreen: React.FC = () => {
       return; // Skip format check in edit mode
     }
 
-    if (!reflectionDraft.format) {
+    if (!reflectionDraft.coachingTone) {
       Alert.alert(
-        "No Format Selected",
-        "Please select a reflection format first.",
-        [{ text: "OK", onPress: () => navigation.navigate("ReflectionFormat") }]
+        "No Coaching Tone Selected",
+        "Please select a coaching tone first.",
+        [{ text: "OK", onPress: () => navigation.navigate("ReflectionTone") }]
       );
       return;
     }
@@ -206,14 +184,14 @@ const ReflectionPromptsScreen: React.FC = () => {
 
             if (allFieldsFilled) {
               // All fields filled in DB - use DB only (ignore draft)
-              setReflectionFormat(reflection.format);
+              setCoachingTone(reflection.coaching_tone);
               updateReflectionDraft("step2", dbStep2);
               updateReflectionDraft("step3", dbStep3);
               updateReflectionDraft("step4", dbStep4);
               setDraftFields(new Set()); // No draft fields used
             } else {
               // Some fields empty - use DB for filled, draft for empty
-              setReflectionFormat(reflection.format);
+              setCoachingTone(reflection.coaching_tone);
 
               // Track which fields came from draft
               const draftFieldsSet: Set<string> = new Set();
@@ -235,8 +213,8 @@ const ReflectionPromptsScreen: React.FC = () => {
               setDraftFields(draftFieldsSet);
             }
           } else if (draft) {
-            // No DB reflection - use draft
-            if (draft.format) setReflectionFormat(draft.format);
+            // No DB reflection - use draft for text content only
+            // Note: Don't restore coachingTone from draft - user's current selection takes precedence
             if (draft.step2) updateReflectionDraft("step2", draft.step2);
             if (draft.step3) updateReflectionDraft("step3", draft.step3);
             if (draft.step4) updateReflectionDraft("step4", draft.step4);
@@ -253,8 +231,8 @@ const ReflectionPromptsScreen: React.FC = () => {
               !draft.step2?.trim() || !draft.step3?.trim() || !draft.step4?.trim();
 
             if (hasIncompleteFields) {
-              // Restore draft - crash recovery
-              if (draft.format) setReflectionFormat(draft.format);
+              // Restore draft text content only - crash recovery
+              // Note: Don't restore coachingTone from draft - user's current selection takes precedence
               if (draft.step2) updateReflectionDraft("step2", draft.step2);
               if (draft.step3) updateReflectionDraft("step3", draft.step3);
               if (draft.step4) updateReflectionDraft("step4", draft.step4);
@@ -275,7 +253,7 @@ const ReflectionPromptsScreen: React.FC = () => {
     };
 
     loadSessionData();
-  }, [lastEndedSessionId, reflectionDraft.format, navigation, isEditMode, route.params?.sessionId]);
+  }, [lastEndedSessionId, reflectionDraft.coachingTone, navigation, isEditMode, route.params?.sessionId]);
 
   // Separate useEffect for edit mode to handle loading
   useEffect(() => {
@@ -321,14 +299,14 @@ const ReflectionPromptsScreen: React.FC = () => {
 
           if (allFieldsFilled) {
             // All fields filled in DB - use DB only (ignore draft)
-            setReflectionFormat(reflection.format);
+            setCoachingTone(reflection.coaching_tone);
             updateReflectionDraft("step2", dbStep2);
             updateReflectionDraft("step3", dbStep3);
             updateReflectionDraft("step4", dbStep4);
             setDraftFields(new Set()); // No draft fields used
           } else {
             // Some fields empty - use DB for filled, draft for empty
-            setReflectionFormat(reflection.format);
+            setCoachingTone(reflection.coaching_tone);
 
             // Track which fields came from draft
             const draftFieldsSet: Set<string> = new Set();
@@ -350,8 +328,8 @@ const ReflectionPromptsScreen: React.FC = () => {
             setDraftFields(draftFieldsSet);
           }
         } else if (draft) {
-          // No DB reflection - use draft
-          if (draft.format) setReflectionFormat(draft.format);
+          // No DB reflection - use draft for text content only
+          // Note: Don't restore coachingTone from draft - user's current selection takes precedence
           if (draft.step2) updateReflectionDraft("step2", draft.step2);
           if (draft.step3) updateReflectionDraft("step3", draft.step3);
           if (draft.step4) updateReflectionDraft("step4", draft.step4);
@@ -385,7 +363,7 @@ const ReflectionPromptsScreen: React.FC = () => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "background" && currentSessionId) {
         saveDraftToStorage(currentSessionId, {
-          format: reflectionDraft.format,
+          coachingTone: reflectionDraft.coachingTone,
           step2: reflectionDraft.step2,
           step3: reflectionDraft.step3,
           step4: reflectionDraft.step4,
@@ -409,9 +387,9 @@ const ReflectionPromptsScreen: React.FC = () => {
 
   // Get current prompt text
   const getCurrentPrompt = (): string => {
-    if (!reflectionDraft.format) return "";
+    if (!reflectionDraft.coachingTone) return "";
     const field = getCurrentField();
-    return PROMPTS[reflectionDraft.format][field];
+    return TONE_PROMPTS[reflectionDraft.coachingTone][field];
   };
 
   // Handle text change with character limit
@@ -435,7 +413,7 @@ const ReflectionPromptsScreen: React.FC = () => {
   const handleBlur = () => {
     if (currentSessionId) {
       debouncedSave(currentSessionId, {
-        format: reflectionDraft.format,
+        coachingTone: reflectionDraft.coachingTone,
         step2: reflectionDraft.step2,
         step3: reflectionDraft.step3,
         step4: reflectionDraft.step4,
@@ -446,7 +424,7 @@ const ReflectionPromptsScreen: React.FC = () => {
   // Navigation handlers
   const handleBack = () => {
     if (currentStepIndex === 0) {
-      navigation.goBack(); // Go back to ReflectionFormatScreen
+      navigation.goBack(); // Go back to ReflectionToneScreen
     } else {
       setCurrentStepIndex(currentStepIndex - 1);
     }

@@ -83,6 +83,54 @@ export const APP_CONSTANTS = {
   EDIT_WINDOW_48H: 48 * 60 * 60 * 1000, // 48h in ms - reflection edit window
 } as const;
 
+// Tone-adapted base prompts for reflection steps
+// Keys: 1 = Facilitative, 2 = Socratic, 3 = Supportive
+export const TONE_PROMPTS: Record<1 | 2 | 3, { step2: string; step3: string; step4: string }> = {
+  1: { // Facilitative - Guided Discovery
+    step2: "What happened during this practice? Which moments stood out to you most?",
+    step3: "What are you noticing about yourself or your approach? Looking back, what worked and what didn't?",
+    step4: "What do you feel ready to explore or try next time?",
+  },
+  2: { // Socratic - Structured Inquiry
+    step2: "What actually happened, step by step? What was different from what you expected?",
+    step3: "What patterns are you seeing? What assumptions did you have going in?",
+    step4: "What specific change will you test in your next session?",
+  },
+  3: { // Supportive - Encouraging
+    step2: "What happened in this session? What parts felt most challenging or successful?",
+    step3: "What's the main thing you're taking away from this? What felt like progress?",
+    step4: "What's one small thing you'll focus on next time?",
+  },
+} as const;
+
+// Coaching tone card data for ReflectionToneScreen
+export const COACHING_TONE_CARDS = [
+  {
+    tone: 1 as const,
+    icon: "🧭",
+    title: "Facilitative",
+    subtitle: "Guided Discovery",
+    description: "Explore your own insights through open questions",
+    bestFor: "Self-directed reflection",
+  },
+  {
+    tone: 2 as const,
+    icon: "🔍",
+    title: "Socratic",
+    subtitle: "Structured Inquiry",
+    description: "Challenge assumptions with purposeful questioning",
+    bestFor: "Deep analysis and pattern-spotting",
+  },
+  {
+    tone: 3 as const,
+    icon: "💪",
+    title: "Supportive",
+    subtitle: "Encouraging",
+    description: "Build confidence with empathy and encouragement",
+    bestFor: "Tough sessions or low energy",
+  },
+] as const;
+
 // Target duration presets (in seconds)
 export const TARGET_DURATION_PRESETS = [
   { label: '15 min', seconds: 15 * 60 },

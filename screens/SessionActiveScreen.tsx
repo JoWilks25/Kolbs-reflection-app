@@ -101,7 +101,7 @@ const SessionActiveScreen: React.FC = () => {
       endSession();  // ← Move this BEFORE navigation
 
       // Navigate to reflection
-      navigation.navigate("ReflectionFormat");
+      navigation.navigate("ReflectionTone");
     } catch (error) {
       console.error("Error ending session:", error);
       Alert.alert("Error", "Failed to end session. Please try again.");

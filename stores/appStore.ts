@@ -174,10 +174,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   /**
    * Set the coaching tone (Facilitative=1, Socratic=2, Supportive=3)
+   * Also sets aiAssisted based on provided aiEnabled flag and device aiAvailable state
+   * @param tone - The coaching tone to set
+   * @param aiEnabled - Whether AI is enabled for this reflection (default: true)
    */
-  setCoachingTone: (tone: CoachingTone) =>
+  setCoachingTone: (tone: CoachingTone, aiEnabled: boolean = true) =>
     set((state) => ({
-      reflectionDraft: { ...state.reflectionDraft, coachingTone: tone },
+      reflectionDraft: {
+        ...state.reflectionDraft,
+        coachingTone: tone,
+        aiAssisted: aiEnabled && state.aiAvailable,
+      },
     })),
 
   /**

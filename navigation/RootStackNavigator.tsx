@@ -7,7 +7,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import HomeScreen from "../screens/HomeScreen";
 import SessionSetupScreen from "../screens/SessionSetupScreen";
 import SessionActiveScreen from "../screens/SessionActiveScreen";
-import ReflectionFormatScreen from "../screens/ReflectionFormatScreen";
+import ReflectionToneScreen from "../screens/ReflectionToneScreen";
 import ReflectionPromptsScreen from "../screens/ReflectionPromptsScreen";
 import ReflectionFeedbackScreen from "../screens/ReflectionFeedbackScreen";
 import SeriesTimelineScreen from "../screens/SeriesTimelineScreen";
@@ -17,7 +17,7 @@ export type RootStackParamList = {
   Home: undefined;
   SessionSetup: { practiceAreaId: string };
   SessionActive: undefined;
-  ReflectionFormat: undefined;
+  ReflectionTone: undefined;
   ReflectionPrompts: { sessionId?: string; editMode?: boolean } | undefined;
   ReflectionFeedback: { sessionId?: string } | undefined;
   SeriesTimeline: { practiceAreaId: string; focusSessionId?: string };
@@ -66,10 +66,10 @@ const RootStackNavigator = () => {
           }}
         />
         <Stack.Screen
-          name="ReflectionFormat"
-          component={ReflectionFormatScreen}
+          name="ReflectionTone"
+          component={ReflectionToneScreen}
           options={({ navigation }) => ({
-            title: "Reflection Format",
+            title: "Coaching Tone",
             headerLeft: () => (
               <TouchableOpacity
                 onPress={() => navigation.reset({
