@@ -1,0 +1,186 @@
+/**
+ * Prompt Service for AI-Assisted Coaching
+ * 
+ * Builds context-aware prompts for placeholder generation and follow-up questions
+ * based on coaching tone and Practice Area type.
+ */
+
+import type { CoachingTone, PracticeAreaType } from '../utils/types';
+
+/**
+ * Context object for AI prompt generation
+ */
+export interface AIContext {
+  practiceAreaName: string;
+  practiceAreaType: PracticeAreaType;
+  sessionIntent: string;
+  previousStep4Answer: string | null;
+  coachingTone: CoachingTone;
+  currentStepAnswers?: {
+    step2?: string;
+    step3?: string;
+  };
+}
+
+/**
+ * System prompts by coaching tone
+ * These set the overall personality and approach for the AI
+ */
+const TONE_SYSTEM_PROMPTS: Record<CoachingTone, string> = {
+  1: `You are a facilitative coach using guided discovery. Help users explore their own beliefs and emotions through clarifying questions. Never give direct answers - guide users to their own conclusions.`,
+  
+  2: `You are a Socratic coach using structured inquiry. Challenge assumptions, examine evidence, and explore implications. Ask probing questions that build critical thinking systematically.`,
+  
+  3: `You are a supportive coach providing emotional scaffolding. Offer encouragement, normalize struggle, and show empathy. Help users feel capable while providing specific assistance when needed.`,
+};
+
+/**
+ * Practice Area type modifiers
+ * These adapt the AI's focus based on the type of practice
+ */
+const TYPE_MODIFIERS: Record<PracticeAreaType, string> = {
+  solo_skill: `Focus on technical execution, precision, and measurable improvement. Reference specific techniques and physical/mental processes.`,
+  
+  performance: `Address execution under pressure, audience awareness, and managing nerves. Consider preparation, presence, and recovery from mistakes.`,
+  
+  interpersonal: `Explore multiple perspectives, emotional dynamics, and relationship impact. Consider how others experienced the interaction.`,
+  
+  creative: `Encourage divergent thinking and embrace uncertainty. Explore where ideas came from and what surprised the user.`,
+};
+
+/**
+ * Step-specific instructions for placeholder generation
+ */
+const PLACEHOLDER_STEP_INSTRUCTIONS: Record<2 | 3 | 4, string> = {
+  2: `Generate a brief placeholder starter (3-6 words) for describing what happened during practice. Example: "I focused on..." or "The main challenge was..."`,
+  3: `Generate a brief placeholder starter (3-6 words) for identifying a lesson or pattern. Example: "I noticed that..." or "The key insight was..."`,
+  4: `Generate a brief placeholder starter (3-6 words) for planning next steps. Example: "Next time I will..." or "I want to try..."`,
+};
+
+/**
+ * Follow-up question matrix: Tone × Type
+ * From PRD Section "How AI Adapts by Practice Area Type × Coaching Tone"
+ */
+const FOLLOWUP_MATRIX: Record<CoachingTone, Record<PracticeAreaType, string>> = {
+  1: { // Facilitative
+    solo_skill: 'How did you feel during the challenging parts?',
+    performance: 'How did your internal experience differ from what you think others saw?',
+    interpersonal: 'How do you think the other person experienced the interaction?',
+    creative: 'What surprised you about where your ideas went?',
+  },
+  2: { // Socratic
+    solo_skill: 'What assumptions did you have going in that proved incorrect?',
+    performance: 'What thought patterns affected your confidence?',
+    interpersonal: 'What evidence do you have for your interpretation of their behavior?',
+    creative: 'What constraints or habits shaped your creative choices?',
+  },
+  3: { // Supportive
+    solo_skill: 'Which part are you most proud of handling?',
+    performance: 'What helped you push through the nerves?',
+    interpersonal: 'What felt uncomfortable, and how did you navigate it?',
+    creative: 'What moments felt like you were in flow?',
+  },
+};
+
+/**
+ * Build a prompt for generating placeholder starter text
+ * 
+ * @param context - AI context with practice area, intent, and tone info
+ * @param step - Kolb step (2, 3, or 4)
+ * @returns Full prompt string for the LLM
+ */
+export const buildPlaceholderPrompt = (
+  context: AIContext,
+  step: 2 | 3 | 4,
+): string => {
+  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
+  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
+  const stepInstruction = PLACEHOLDER_STEP_INSTRUCTIONS[step];
+  
+  return `${tonePrompt}
+
+${typeModifier}
+
+Context:
+- Practice Area: ${context.practiceAreaName}
+- Today's Intent: ${context.sessionIntent}
+${context.previousStep4Answer ? `- Previous Session Goal: ${context.previousStep4Answer}` : ''}
+
+${stepInstruction}
+
+Respond with ONLY the placeholder text, nothing else.`;
+};
+
+/**
+ * Build a prompt for generating follow-up questions
+ * 
+ * @param context - AI context with practice area, intent, and tone info
+ * @param step - Kolb step (2, 3, or 4)
+ * @param userAnswer - The user's current (brief) answer
+ * @returns Full prompt string for the LLM
+ */
+export const buildFollowupPrompt = (
+  context: AIContext,
+  step: 2 | 3 | 4,
+  userAnswer: string,
+): string => {
+  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
+  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
+  const followupExample = getFollowupExample(context.coachingTone, context.practiceAreaType);
+  
+  return `${tonePrompt}
+
+${typeModifier}
+
+Context:
+- Practice Area: ${context.practiceAreaName} (${context.practiceAreaType})
+- Today's Intent: ${context.sessionIntent}
+- User's answer so far: "${userAnswer}"
+
+The user's answer is brief. Generate ONE follow-up question to help them reflect more deeply.
+
+Example follow-up for this tone and practice type:
+"${followupExample}"
+
+Respond with ONLY the follow-up question, nothing else.`;
+};
+
+/**
+ * Get a follow-up example for a specific tone and practice area type
+ */
+export const getFollowupExample = (
+  tone: CoachingTone,
+  type: PracticeAreaType,
+): string => {
+  return FOLLOWUP_MATRIX[tone][type];
+};
+
+/**
+ * Get the tone-adapted base prompt for each Kolb step
+ * Used when AI is disabled but coaching tone is still selected
+ */
+export const getTonePromptForStep = (
+  tone: CoachingTone,
+  step: 2 | 3 | 4,
+): string => {
+  const prompts: Record<CoachingTone, Record<2 | 3 | 4, string>> = {
+    1: { // Facilitative
+      2: "What happened during this practice? Which moments stood out to you most?",
+      3: "What are you noticing about yourself or your approach?",
+      4: "What do you feel ready to explore or try next time?",
+    },
+    2: { // Socratic
+      2: "What actually happened, step by step? What was different from what you expected?",
+      3: "Looking back, what worked and what didn't? What patterns are you seeing?",
+      4: "What specific change will you test in your next session?",
+    },
+    3: { // Supportive
+      2: "What happened in this session? What parts felt most challenging or successful?",
+      3: "What's the main thing you're taking away from this? What felt like progress?",
+      4: "What's one small thing you'll focus on next time?",
+    },
+  };
+  
+  return prompts[tone][step];
+};
+
