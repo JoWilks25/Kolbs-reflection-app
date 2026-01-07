@@ -6,7 +6,8 @@ import {
   Modal,
   TouchableOpacity,
 } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { COLORS, SPACING, TYPOGRAPHY, TYPE_BADGE_CONFIG } from '../utils/constants';
 
 interface PickerOption {
   value: string;
@@ -47,35 +48,70 @@ const PracticeAreaTypePicker: React.FC<PracticeAreaTypePickerProps> = ({
           style={styles.pickerModalContent}
           onStartShouldSetResponder={() => true}
         >
-          <Text style={styles.pickerModalTitle}>{title}</Text>
-          {options.map((item) => (
+          <View style={styles.pickerModalHeader}>
+            <Text style={styles.pickerModalTitle}>{title}</Text>
             <TouchableOpacity
-              key={item.value}
-              style={[
-                styles.pickerOption,
-                selectedValue === item.value && styles.pickerOptionSelected,
-              ]}
-              onPress={() => onSelect(item.value)}
+              style={styles.closeIconButton}
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <View style={styles.pickerOptionContent}>
-                <Text style={[
-                  styles.pickerOptionLabel,
-                  selectedValue === item.value && styles.pickerOptionLabelSelected,
-                ]}>
-                  {item.label}
-                </Text>
-                <Text style={[
-                  styles.pickerOptionDescription,
-                  selectedValue === item.value && styles.pickerOptionDescriptionSelected,
-                ]}>
-                  {item.description}
-                </Text>
-              </View>
-              {selectedValue === item.value && (
-                <Text style={styles.pickerCheckmark}>✓</Text>
-              )}
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={COLORS.text.secondary}
+              />
             </TouchableOpacity>
-          ))}
+          </View>
+          {options.map((item) => {
+            const typeConfig = TYPE_BADGE_CONFIG[item.value as keyof typeof TYPE_BADGE_CONFIG];
+            const isSelected = selectedValue === item.value;
+
+            return (
+              <TouchableOpacity
+                key={item.value}
+                style={[
+                  styles.pickerOption,
+                  isSelected && typeConfig && {
+                    backgroundColor: typeConfig.backgroundColor,
+                    borderColor: typeConfig.color,
+                  },
+                  isSelected && !typeConfig && styles.pickerOptionSelected,
+                ]}
+                onPress={() => onSelect(item.value)}
+              >
+                {typeConfig && (
+                  <View style={styles.pickerOptionIcon}>
+                    <MaterialCommunityIcons
+                      name={typeConfig.iconName}
+                      size={20}
+                      color={isSelected ? typeConfig.color : COLORS.text.secondary}
+                    />
+                  </View>
+                )}
+                <View style={styles.pickerOptionContent}>
+                  <Text style={[
+                    styles.pickerOptionLabel,
+                    isSelected && styles.pickerOptionLabelSelected,
+                    isSelected && typeConfig && { color: typeConfig.color },
+                  ]}>
+                    {item.label}
+                  </Text>
+                  <Text style={[
+                    styles.pickerOptionDescription,
+                    isSelected && styles.pickerOptionDescriptionSelected,
+                  ]}>
+                    {item.description}
+                  </Text>
+                </View>
+                {isSelected && (
+                  <Text style={[
+                    styles.pickerCheckmark,
+                    typeConfig && { color: typeConfig.color },
+                  ]}>✓</Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </TouchableOpacity>
     </Modal>
@@ -98,12 +134,21 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     maxHeight: '80%',
   },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+  },
   pickerModalTitle: {
     fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.primary,
-    marginBottom: SPACING.md,
-    paddingHorizontal: SPACING.sm,
+    flex: 1,
+  },
+  closeIconButton: {
+    padding: SPACING.xs,
   },
   pickerOption: {
     flexDirection: 'row',
@@ -119,6 +164,11 @@ const styles = StyleSheet.create({
   pickerOptionSelected: {
     backgroundColor: 'rgba(90, 159, 212, 0.15)', // 15% opacity of primary color
     borderColor: COLORS.primary,
+  },
+  pickerOptionIcon: {
+    marginRight: SPACING.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pickerOptionContent: {
     flex: 1,

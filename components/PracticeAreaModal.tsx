@@ -9,8 +9,8 @@ import {
   Alert,
 } from "react-native";
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
-import { PracticeArea, PracticeAreaType } from "../utils";
+import { COLORS, SPACING, TYPOGRAPHY, TYPE_BADGE_CONFIG } from "../utils/constants";
+import { PracticeArea, PracticeAreaType, PRACTICE_AREA_TYPES } from "../utils";
 import PracticeAreaTypePicker from "./PracticeAreaTypePicker";
 
 export interface PracticeAreaModalProps {
@@ -36,30 +36,6 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
   const [error, setError] = useState("");
   const [type, setType] = useState<PracticeAreaType>('solo_skill');
   const [pickerOpen, setPickerOpen] = useState(false);
-
-  // Practice area type definitions
-  const practiceAreaTypes = [
-    {
-      value: 'solo_skill',
-      label: 'Solo Skill',
-      description: 'Technical practice, measurable progress'
-    },
-    {
-      value: 'performance',
-      label: 'Performance',
-      description: 'Execution under pressure, audience awareness'
-    },
-    {
-      value: 'interpersonal',
-      label: 'Interpersonal',
-      description: 'Communication, emotional dynamics'
-    },
-    {
-      value: 'creative',
-      label: 'Creative',
-      description: 'Exploration, experimentation, non-linear discovery'
-    },
-  ];
 
   // Reset state when modal closes
   useEffect(() => {
@@ -127,19 +103,18 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{!selectedPracticeArea?.id ? 'New' : 'Edit'} Practice Area
-            </Text>
-            {
-              selectedPracticeArea?.id &&
-              <TouchableOpacity style={styles.iconOnlyDelete} onPress={() => onDelete(selectedPracticeArea.id)}>
-                {/* <Text style={styles.deleteIcon}>🗑️</Text> */}
-                <MaterialCommunityIcons
-                  name="close"
-                  size={20}
-                // color={styles.deleteIcon.color}
-                />
-              </TouchableOpacity>
-            }
+            <Text style={styles.modalTitle}>{!selectedPracticeArea?.id ? 'New' : 'Edit'} Practice Area</Text>
+            <TouchableOpacity
+              style={styles.closeIconButton}
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={COLORS.text.secondary}
+              />
+            </TouchableOpacity>
           </View>
           <TextInput
             style={styles.input}
@@ -161,46 +136,95 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
           <View style={styles.pickerSection}>
             <Text style={styles.pickerLabel}>Practice Area Type</Text>
             <TouchableOpacity
-              style={styles.pickerButton}
+              style={[
+                styles.pickerButton,
+                TYPE_BADGE_CONFIG[type] && {
+                  backgroundColor: TYPE_BADGE_CONFIG[type].backgroundColor,
+                  borderColor: TYPE_BADGE_CONFIG[type].color,
+                },
+              ]}
               onPress={() => setPickerOpen(true)}
               disabled={isLoading}
             >
               <View style={styles.pickerButtonContent}>
+                {TYPE_BADGE_CONFIG[type] && (
+                  <View style={styles.pickerButtonIcon}>
+                    <MaterialCommunityIcons
+                      name={TYPE_BADGE_CONFIG[type].iconName}
+                      size={20}
+                      color={TYPE_BADGE_CONFIG[type].color}
+                    />
+                  </View>
+                )}
                 <View style={styles.pickerButtonTextContainer}>
-                  <Text style={styles.pickerButtonLabel}>
-                    {practiceAreaTypes.find(t => t.value === type)?.label}
+                  <Text style={[
+                    styles.pickerButtonLabel,
+                    TYPE_BADGE_CONFIG[type] && { color: TYPE_BADGE_CONFIG[type].color },
+                  ]}>
+                    {PRACTICE_AREA_TYPES.find(t => t.value === type)?.label}
                   </Text>
                   <Text style={styles.pickerButtonDescription} numberOfLines={1}>
-                    {practiceAreaTypes.find(t => t.value === type)?.description}
+                    {PRACTICE_AREA_TYPES.find(t => t.value === type)?.description}
                   </Text>
                 </View>
-                <Text style={styles.pickerChevron}>▼</Text>
+                <Text style={[
+                  styles.pickerChevron,
+                  TYPE_BADGE_CONFIG[type] && { color: TYPE_BADGE_CONFIG[type].color },
+                ]}>▼</Text>
               </View>
             </TouchableOpacity>
           </View>
 
           <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.cancelButton]}
-              onPress={onClose}
-              disabled={isLoading}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.modalButton,
-                styles.createButton,
-                isLoading && styles.createButtonDisabled,
-              ]}
-              onPress={handleSubmit}
-              disabled={isLoading}
-            >
-              <Text style={styles.createButtonText}>
-                {isLoading ? "Creating..." : "Create"}
-              </Text>
-            </TouchableOpacity>
-          </View>ı
+            {selectedPracticeArea?.id && (
+              <TouchableOpacity
+                style={[styles.modalButton, styles.updateButton]}
+                onPress={handleSubmit}
+                disabled={isLoading}
+              >
+                <Text style={styles.updateButtonText}>
+                  {isLoading ? "Updating..." : "Update"}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {selectedPracticeArea?.id && (
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteButton]}
+                onPress={() => {
+                  Alert.alert(
+                    "Delete Practice Area",
+                    `Are you sure you want to delete "${selectedPracticeArea.name}"? This action cannot be undone.`,
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: () => onDelete(selectedPracticeArea.id),
+                      },
+                    ]
+                  );
+                }}
+                disabled={isLoading}
+              >
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            )}
+            {!selectedPracticeArea?.id && (
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.createButton,
+                  isLoading && styles.createButtonDisabled,
+                ]}
+                onPress={handleSubmit}
+                disabled={isLoading}
+              >
+                <Text style={styles.createButtonText}>
+                  {isLoading ? "Creating..." : "Create"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -208,7 +232,7 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
         title="Select Practice Area Type"
-        options={practiceAreaTypes}
+        options={PRACTICE_AREA_TYPES}
         selectedValue={type}
         onSelect={(value) => {
           setType(value as PracticeAreaType);
@@ -252,8 +276,10 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.xl,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.primary,
-    marginBottom: SPACING.lg,
-    textAlign: 'center',
+    flex: 1,
+  },
+  closeIconButton: {
+    padding: SPACING.xs,
   },
   input: {
     backgroundColor: COLORS.background,
@@ -290,25 +316,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  iconOnlyDelete: {
-
-    // padding: 12,
-    // borderRadius: 8,
-    // backgroundColor: '#FEE2E2',
-    // borderWidth: 1,
-    // borderColor: '#FECACA',
+  updateButton: {
+    backgroundColor: COLORS.primary,
   },
-  deleteIcon: {
-    fontSize: 20,
-    color: '#DC2626', // Red destructive
-  },
-  cancelButton: {
-    backgroundColor: COLORS.neutral[200],
-  },
-  cancelButtonText: {
+  updateButtonText: {
     fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-    color: COLORS.text.primary,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
+  },
+  deleteButton: {
+    backgroundColor: COLORS.error,
+  },
+  deleteButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.inverse,
   },
   createButton: {
     backgroundColor: COLORS.primary,
@@ -341,6 +363,11 @@ const styles = StyleSheet.create({
   pickerButtonContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pickerButtonIcon: {
+    marginRight: SPACING.sm,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   pickerButtonTextContainer: {

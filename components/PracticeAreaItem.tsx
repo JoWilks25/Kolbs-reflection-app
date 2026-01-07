@@ -3,43 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { PracticeArea, PracticeAreaWithStats } from "../utils/types";
 import { formatDate } from "../utils/timeFormatting";
-import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
+import { COLORS, SPACING, TYPOGRAPHY, TYPE_BADGE_CONFIG } from "../utils/constants";
 
 // Format session count with proper pluralization
 const formatSessionCount = (count: number): string => {
   return count === 1 ? "1 session" : `${count} sessions`;
-};
-
-// Type badge configuration with semi-transparent backgrounds
-const TYPE_BADGE_CONFIG = {
-  solo_skill: {
-    label: 'Solo',
-    color: '#7E57C2',  // Purple - precision, focus
-    backgroundColor: 'rgba(126, 87, 194, 0.15)',  // 15% opacity
-    iconName: 'target' as const,
-    emoji: '🎯',
-  },
-  performance: {
-    label: 'Performance',
-    color: '#EC407A',  // Pink - energy, boldness
-    backgroundColor: 'rgba(236, 64, 122, 0.15)',  // 15% opacity
-    iconName: 'lightning-bolt' as const,
-    emoji: '🎭',
-  },
-  interpersonal: {
-    label: 'Interpersonal',
-    color: '#26A69A',  // Teal - communication, connection
-    backgroundColor: 'rgba(38, 166, 154, 0.15)',  // 15% opacity
-    iconName: 'account-group-outline' as const,
-    emoji: '👥',
-  },
-  creative: {
-    label: 'Creative',
-    color: '#9C27B0',  // Deep purple - imagination, creativity
-    backgroundColor: 'rgba(156, 39, 176, 0.15)',  // 15% opacity
-    iconName: 'lightbulb-outline' as const,
-    emoji: '🎨',
-  },
 };
 
 export interface PracticeAreaItemProps {
