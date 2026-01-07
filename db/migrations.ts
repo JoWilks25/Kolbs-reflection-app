@@ -29,7 +29,7 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
     );
 
     const tableNames = tables.map(t => t.name);
-    const requiredTables = ['practice_areas', 'sessions', 'reflections'];
+    const requiredTables = ['practiceareas', 'sessions', 'reflections'];
     const tablesExist = requiredTables.every(table => tableNames.includes(table));
 
     // Only run schema if tables don't exist
@@ -71,4 +71,3 @@ export async function closeDatabase(): Promise<void> {
     db = null;
   }
 }
-
