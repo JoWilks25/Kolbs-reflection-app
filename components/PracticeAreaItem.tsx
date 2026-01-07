@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { PracticeArea, PracticeAreaWithStats } from "../utils/types";
 import { formatDate } from "../utils/timeFormatting";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
@@ -7,6 +8,38 @@ import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 // Format session count with proper pluralization
 const formatSessionCount = (count: number): string => {
   return count === 1 ? "1 session" : `${count} sessions`;
+};
+
+// Type badge configuration with semi-transparent backgrounds
+const TYPE_BADGE_CONFIG = {
+  solo_skill: {
+    label: 'Solo',
+    color: '#7E57C2',  // Purple - precision, focus
+    backgroundColor: 'rgba(126, 87, 194, 0.15)',  // 15% opacity
+    iconName: 'target' as const,
+    emoji: '🎯',
+  },
+  performance: {
+    label: 'Performance',
+    color: '#EC407A',  // Pink - energy, boldness
+    backgroundColor: 'rgba(236, 64, 122, 0.15)',  // 15% opacity
+    iconName: 'lightning-bolt' as const,
+    emoji: '🎭',
+  },
+  interpersonal: {
+    label: 'Interpersonal',
+    color: '#26A69A',  // Teal - communication, connection
+    backgroundColor: 'rgba(38, 166, 154, 0.15)',  // 15% opacity
+    iconName: 'account-group-outline' as const,
+    emoji: '👥',
+  },
+  creative: {
+    label: 'Creative',
+    color: '#9C27B0',  // Deep purple - imagination, creativity
+    backgroundColor: 'rgba(156, 39, 176, 0.15)',  // 15% opacity
+    iconName: 'lightbulb-outline' as const,
+    emoji: '🎨',
+  },
 };
 
 export interface PracticeAreaItemProps {
@@ -32,6 +65,9 @@ const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress, onVi
       ? styles.cardBorderPending
       : null;
 
+  // Get type badge config
+  const typeBadge = TYPE_BADGE_CONFIG[item.type];
+
   return (
     <TouchableOpacity
       style={[styles.practiceAreaItem, borderStyle]}
@@ -39,35 +75,55 @@ const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress, onVi
       activeOpacity={0.7}
     >
       <View style={styles.itemContent}>
+        {/* Top Row: Name + Pending/Overdue Indicators */}
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => onEdit(item)}><Text style={styles.practiceAreaName}>✏️</Text></TouchableOpacity>
-          <Text style={styles.practiceAreaName}>{item.name}</Text>
+          <TouchableOpacity onPress={() => onEdit(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <MaterialCommunityIcons
+              name="square-edit-outline"
+              size={20}
+              color={COLORS.text.secondary}
+            />
+          </TouchableOpacity>
+          <Text style={styles.practiceAreaName} numberOfLines={2}>
+            {item.name}
+          </Text>
           {hasIndicators && (
             <View style={styles.indicatorContainer}>
               {hasPending && (
                 <View style={styles.pendingBadge}>
                   <Text style={styles.pendingBadgeText}>
-                    {item.pendingReflectionsCount} pending
+                    {item.pendingReflectionsCount}
                   </Text>
                 </View>
               )}
               {hasOverdue && (
                 <View style={styles.overdueBadge}>
                   <Text style={styles.overdueBadgeText}>
-                    {item.overdueReflectionsCount} overdue
+                    {item.overdueReflectionsCount}
                   </Text>
                 </View>
               )}
             </View>
           )}
         </View>
-        <Text style={styles.lastSessionDate}>{lastSessionText}</Text>
-        <View style={styles.sessionCountBadge}>
-          <Text style={styles.sessionCountText}>
-            {formatSessionCount(item.sessionCount)}
-          </Text>
+
+        {/* Stats Row: Type + Session Count + Last Session */}
+        <View style={styles.statsRow}>
+          <View style={[styles.typeBadge, { backgroundColor: typeBadge.backgroundColor }]}>
+            <MaterialCommunityIcons
+              name={typeBadge.iconName}
+              size={16}
+              color={typeBadge.color}
+            />
+            <Text style={[styles.typeBadgeText, { color: typeBadge.color }]}>
+              {typeBadge.label}
+            </Text>
+          </View>
+          <Text style={styles.statsSeparator}>·</Text>
+          <Text style={styles.statsText} numberOfLines={1}>{item.lastSessionDate ? 'Last Session:' : ''} {lastSessionText}</Text>
         </View>
 
+        {/* Action Buttons */}
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -81,7 +137,9 @@ const PracticeAreaItem: React.FC<PracticeAreaItemProps> = ({ item, onPress, onVi
             onPress={() => onViewTimeline(item.id)}
             activeOpacity={0.8}
           >
-            <Text style={styles.secondaryButtonText}>View timeline</Text>
+            <Text style={styles.secondaryButtonText}>
+              View timeline {item.sessionCount > 0 && `(${item.sessionCount})`}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -113,20 +171,21 @@ const styles = StyleSheet.create({
     borderLeftColor: COLORS.error,
   },
   itemContent: {
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: SPACING.xs,
+    gap: SPACING.xs,
+  },
+  editIcon: {
+    fontSize: TYPOGRAPHY.fontSize.lg,
   },
   practiceAreaName: {
     fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.primary,
     flex: 1,
-    marginRight: SPACING.sm,
   },
   indicatorContainer: {
     flexDirection: 'row',
@@ -136,47 +195,62 @@ const styles = StyleSheet.create({
   pendingBadge: {
     backgroundColor: COLORS.warning,
     paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs / 2,
-    borderRadius: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    alignItems: 'center',
   },
   pendingBadgeText: {
     fontSize: TYPOGRAPHY.fontSize.xs,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: COLORS.text.inverse,
   },
   overdueBadge: {
     backgroundColor: COLORS.error,
     paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs / 2,
-    borderRadius: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    alignItems: 'center',
   },
   overdueBadgeText: {
     fontSize: TYPOGRAPHY.fontSize.xs,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: COLORS.text.inverse,
   },
-  lastSessionDate: {
+  // Stats Row
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  typeBadgeText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  statsText: {
     fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.text.secondary,
-    marginBottom: SPACING.xs,
+    flexShrink: 1,
   },
-  sessionCountBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 12,
-    marginTop: SPACING.xs,
-  },
-  sessionCountText: {
-    fontSize: TYPOGRAPHY.fontSize.xs,
+  statsSeparator: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
-    color: COLORS.text.inverse,
   },
   actionsRow: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    marginTop: SPACING.md,
+    marginTop: SPACING.xs,
   },
   primaryButton: {
     flex: 1,
@@ -207,4 +281,3 @@ const styles = StyleSheet.create({
 });
 
 export default PracticeAreaItem;
-

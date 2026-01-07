@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
 import { PracticeArea, PracticeAreaType } from "../utils";
 import PracticeAreaTypePicker from "./PracticeAreaTypePicker";
@@ -131,7 +132,12 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
             {
               selectedPracticeArea?.id &&
               <TouchableOpacity style={styles.iconOnlyDelete} onPress={() => onDelete(selectedPracticeArea.id)}>
-                <Text style={styles.deleteIcon}>🗑️</Text>
+                {/* <Text style={styles.deleteIcon}>🗑️</Text> */}
+                <MaterialCommunityIcons
+                  name="close"
+                  size={20}
+                // color={styles.deleteIcon.color}
+                />
               </TouchableOpacity>
             }
           </View>
@@ -285,11 +291,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconOnlyDelete: {
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
+
+    // padding: 12,
+    // borderRadius: 8,
+    // backgroundColor: '#FEE2E2',
+    // borderWidth: 1,
+    // borderColor: '#FECACA',
   },
   deleteIcon: {
     fontSize: 20,

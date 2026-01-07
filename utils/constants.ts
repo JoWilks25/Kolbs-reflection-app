@@ -14,6 +14,7 @@ export const COLORS = {
   },
 
   // Status colors (keep current - they work well)
+  info: '#2C3E50',
   success: '#4CAF50',
   warning: '#FF9800',
   error: '#F44336',
