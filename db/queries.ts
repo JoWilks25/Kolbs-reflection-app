@@ -71,22 +71,45 @@ export async function getPracticeAreas(): Promise<PracticeAreaWithStats[]> {
   })) as PracticeAreaWithStats[];
 }
 
-export async function updatePracticeArea(editedName: string, id: string, type?: PracticeAreaType): Promise<PracticeArea> {
+export async function updatePracticeArea(
+  id: string,
+  updates: { name?: string; type?: PracticeAreaType }
+): Promise<PracticeArea> {
   const db = getDatabase();
 
-  // Build dynamic update query
-  const updates: string[] = ['name = ?'];
-  const values: any[] = [editedName];
+  // Build dynamic update query only for provided fields
+  const updateFields: string[] = [];
+  const values: any[] = [];
 
-  if (type !== undefined) {
-    updates.push('type = ?');
-    values.push(type);
+  if (updates.name !== undefined) {
+    updateFields.push('name = ?');
+    values.push(updates.name);
   }
 
-  values.push(id); // Add id for WHERE clause
+  if (updates.type !== undefined) {
+    updateFields.push('type = ?');
+    values.push(updates.type);
+  }
+
+  // If no fields to update, just return the current record
+  if (updateFields.length === 0) {
+    const current = await db.getFirstAsync<PracticeArea>(
+      'SELECT * FROM practice_areas WHERE id = ? AND is_deleted = 0',
+      [id]
+    );
+
+    if (!current) {
+      throw new Error('Practice Area not found or already deleted');
+    }
+
+    return current;
+  }
+
+  // Add id for WHERE clause
+  values.push(id);
 
   const result = await db.runAsync(
-    `UPDATE practice_areas SET ${updates.join(', ')} WHERE id = ? AND is_deleted = 0`,
+    `UPDATE practice_areas SET ${updateFields.join(', ')} WHERE id = ? AND is_deleted = 0`,
     values
   );
 
@@ -107,23 +130,40 @@ export async function updatePracticeArea(editedName: string, id: string, type?: 
   return updated;
 }
 
+
 /**
  * Check if a Practice Area name already exists (case-insensitive, trimmed)
+ * Excludes the practice area with the given ID from the check (for updates)
  * @param name - The name to check
- * @returns True if the name exists, false otherwise
+ * @param excludeId - Optional ID to exclude from the check (e.g., when updating)
+ * @returns True if the name exists in another practice area, false otherwise
  */
-export async function checkPracticeAreaNameExists(name: string): Promise<boolean> {
+export async function checkPracticeAreaNameExists(
+  name: string,
+  excludeId?: string
+): Promise<boolean> {
   const db = getDatabase();
-  const result = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) as count 
-     FROM practice_areas 
-     WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) 
-     AND is_deleted = 0`,
-    [name]
-  );
+
+  let query = `
+    SELECT COUNT(*) as count 
+    FROM practice_areas 
+    WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) 
+    AND is_deleted = 0
+  `;
+
+  const params: any[] = [name];
+
+  // Exclude the specified ID if provided (for update scenarios)
+  if (excludeId) {
+    query += ` AND id != ?`;
+    params.push(excludeId);
+  }
+
+  const result = await db.getFirstAsync<{ count: number }>(query, params);
 
   return (result?.count ?? 0) > 0;
 }
+
 
 /**
  * Create a new Practice Area

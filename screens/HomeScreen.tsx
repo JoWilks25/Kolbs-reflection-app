@@ -14,7 +14,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from '../utils/constants';
 import { useAppStore } from '../stores/appStore';
-import { PracticeAreaWithStats, PendingReflection, PracticeArea } from '../utils/types';
+import { PracticeAreaWithStats, PendingReflection, PracticeArea, PracticeAreaType } from '../utils/types';
 import { getPracticeAreas, createPracticeArea, checkPracticeAreaNameExists, getPendingReflections, insertTestData, getBlockingUnreflectedSession, updatePracticeArea, deletePracticeArea } from "../db/queries";
 import { getDatabase } from "../db/migrations";
 import PendingReflectionsBanner from "../components/PendingReflectionsBanner";
@@ -86,32 +86,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  // In HomeScreen or a dev screen
-  const handleReset = async () => {
-    const db = getDatabase();
-    await db.runAsync('DELETE FROM practice_areas');
-    await db.runAsync('DELETE FROM sessions');
-    await db.runAsync('DELETE FROM reflections');
-    await loadPracticeAreas(); // Refresh the list
-    Alert.alert('Reset', 'Practice Areas table cleared');
-  };
-
-  // Uncomment and modify
-  const handleInsertTestData = async () => {
-    try {
-      await insertTestData();
-      await loadPracticeAreas();
-      await loadPendingReflections();
-      Alert.alert('Test Data', 'Test pending reflections data inserted');
-    } catch (error) {
-      console.error('Error inserting test data:', error);
-      Alert.alert('Error', 'Failed to insert test data');
-    }
-  };
-
   useEffect(() => {
-    // handleReset();
-    // handleInsertTestData();
     checkAndShowSecurityWarning();
     loadPendingReflections();
     loadPracticeAreas();
@@ -189,7 +164,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     setIsCreateModalVisible(false);
   };
 
-  const handleCreatePracticeArea = async (name: string) => {
+  const handleCreatePracticeArea = async (name: string, practiceAreaType: PracticeAreaType) => {
     setIsLoading(true);
     try {
       // Check for duplicate name
@@ -197,7 +172,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       if (nameExists) {
         throw new Error("A Practice Area with this name already exists");
       }
-      await createPracticeArea(name);
+      await createPracticeArea(name, practiceAreaType);
       closeCreateModal();
       await loadPracticeAreas();
     } catch (error: any) {
@@ -210,15 +185,15 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleEditPracticeArea = async (editedName: string, id: string) => {
+  const handleEditPracticeArea = async (editedName: string, id: string, type: PracticeAreaType) => {
     setIsLoading(true);
     try {
       // Check for duplicate name
-      const nameExists = await checkPracticeAreaNameExists(editedName);
+      const nameExists = await checkPracticeAreaNameExists(id, editedName);
       if (nameExists) {
         throw new Error("A Practice Area with this name already exists");
       }
-      await updatePracticeArea(editedName, id);
+      await updatePracticeArea(id, { name: editedName, type });
       closeCreateModal();
       await loadPracticeAreas();
     } catch (error: any) {

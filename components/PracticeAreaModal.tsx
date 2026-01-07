@@ -9,13 +9,13 @@ import {
   Alert,
 } from "react-native";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
-import { PracticeArea } from "../utils";
+import { PracticeArea, PracticeAreaType } from "../utils";
 
 export interface PracticeAreaModalProps {
   visible: boolean;
   onClose: () => void;
-  onCreate: (name: string) => Promise<void>;
-  onEdit: (editedName: string, id: string) => Promise<void>;
+  onCreate: (name: string, type: PracticeAreaType) => Promise<void>;
+  onEdit: (editedName: string, id: string, type: PracticeAreaType) => Promise<void>;
   onDelete: (id: string) => void;
   isLoading?: boolean;
   selectedPracticeArea?: PracticeArea;
@@ -32,7 +32,7 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
 }) => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const [type, setType] = useState('solo_skill');
+  const [type, setType] = useState<PracticeAreaType>('solo_skill');
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Practice area type definitions
@@ -72,6 +72,7 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
   useEffect(() => {
     if (selectedPracticeArea) {
       setName(selectedPracticeArea.name);
+      setType(selectedPracticeArea.type)
     }
   }, [selectedPracticeArea?.name])
 
@@ -88,8 +89,8 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
   const handleSubmit = async () => {
     const trimmedName = name.trim();
 
-    if (trimmedName === selectedPracticeArea?.name) {
-      Alert.alert("No changes made to name")
+    if (trimmedName === selectedPracticeArea?.name && type === selectedPracticeArea.type) {
+      Alert.alert("No changes made to name or type")
       return;
     }
 
@@ -99,9 +100,9 @@ const PracticeAreaModal: React.FC<PracticeAreaModalProps> = ({
 
     try {
       if (selectedPracticeArea?.id) {
-        await onEdit(trimmedName, selectedPracticeArea.id)
+        await onEdit(trimmedName, selectedPracticeArea.id, type)
       } else {
-        await onCreate(trimmedName);
+        await onCreate(trimmedName, type);
       }
       // If successful, the parent will close the modal
     } catch (error: any) {
