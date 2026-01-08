@@ -12,9 +12,8 @@
 import { apple } from '@react-native-ai/apple';
 import { generateText } from 'ai';
 import { Platform } from 'react-native';
-import { buildPlaceholderPrompt, buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, type AIContext } from './promptService';
+import { buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, type AIContext } from './promptService';
 import type { CoachingTone, PracticeAreaType } from '../utils/types';
-import { getSessionCount, getRecentIntents } from '../db/queries';
 import { TONE_PROMPTS } from '../utils/constants';
 
 // Re-export AIContext for consumers
@@ -57,47 +56,6 @@ export const checkAIAvailability = async (): Promise<boolean> => {
   // (errors will be caught gracefully in generatePlaceholder/generateFollowup)
   console.log('AI availability check: iOS version supported');
   return true;
-};
-
-/**
- * Generate a placeholder starter for a Kolb step
- * 
- * Creates a brief (3-6 word) contextual starter phrase to help users
- * begin their reflection. Example: "I focused on..." or "The main challenge was..."
- * 
- * @deprecated This function is kept for backward compatibility but is no longer used.
- * Use generateStepQuestion() instead for AI-generated questions.
- * 
- * @param context - AI context with practice area, intent, and tone
- * @param step - Kolb step (2, 3, or 4)
- * @returns Generated placeholder text, or null if generation fails
- */
-export const generatePlaceholder = async (
-  context: AIContext,
-  step: 2 | 3 | 4,
-): Promise<string | null> => {
-  const prompt = buildPlaceholderPrompt(context, step);
-
-  try {
-    const startTime = Date.now();
-
-    const result = await generateText({
-      model: apple() as any, // Type assertion to work around dependency version mismatch
-      prompt,
-      maxOutputTokens: 50, // Changed from maxTokens to maxOutputTokens
-      temperature: 0.7,
-    });
-
-    const latency = Date.now() - startTime;
-    if (latency > LATENCY_WARNING_THRESHOLD) {
-      console.warn(`AI placeholder latency exceeded target: ${latency}ms`);
-    }
-
-    return result.text?.trim() || null;
-  } catch (error) {
-    console.error('Placeholder generation failed:', error);
-    return null;
-  }
 };
 
 /**
@@ -238,8 +196,6 @@ export const analyzeIntentForFirstSession = async (
   userIntent: string,
   practiceAreaName: string,
   practiceAreaType: PracticeAreaType,
-  practiceAreaId: string,
-  currentSessionId: string | null = null
 ): Promise<{
   specificityLevel: "GENERIC" | "PARTIALLY_SPECIFIC" | "SPECIFIC";
   clarifyingQuestions: string[] | null;
@@ -256,35 +212,6 @@ export const analyzeIntentForFirstSession = async (
     };
   }
 
-  // Fetch session count first to optimize query
-  let sessionCount = 0;
-  let recentIntents: Array<{ sessionNumber: number; daysAgo: number; intent: string }> = [];
-
-  try {
-    sessionCount = await getSessionCount(practiceAreaId);
-
-    // If it's the first session, skip the recent intents query
-    if (sessionCount === 0) {
-      // First session - use empty array and count = 1 (the session being created)
-      recentIntents = [];
-      sessionCount = 1;
-    } else {
-      // Fetch recent intents and increment count for the session being created
-      try {
-        recentIntents = await getRecentIntents(practiceAreaId, currentSessionId, 3);
-      } catch (error) {
-        console.error('Failed to fetch recent intents:', error);
-        recentIntents = []; // Fallback to empty array
-      }
-      sessionCount = sessionCount + 1; // Account for the session being created
-    }
-  } catch (error) {
-    console.error('Failed to fetch session count:', error);
-    // Fallback: treat as first session
-    sessionCount = 1;
-    recentIntents = [];
-  }
-
   const prompt = buildIntentAnalysisPrompt(
     userIntent,
     practiceAreaName,
@@ -293,7 +220,6 @@ export const analyzeIntentForFirstSession = async (
 
   try {
     const startTime = Date.now();
-    console.log('prompt', prompt)
     const result = await generateText({
       model: apple() as any, // Type assertion to work around dependency version mismatch
       prompt,
@@ -307,25 +233,13 @@ export const analyzeIntentForFirstSession = async (
     }
 
     // Parse response: expect JSON format
-    // {"specificityLevel": "GENERIC" | "PARTIALLY_SPECIFIC" | "SPECIFIC", "clarifyingQuestions": [...], "refinedSuggestions": [...], "feedback": "..."}
-    const parsed = JSON.parse(result.text.replaceAll('`', '').replace("json", ""));
-    console.log('parsed', parsed)
-    // Validate specificityLevel
-    const level = parsed.specificityLevel;
-    if (level !== "GENERIC" && level !== "PARTIALLY_SPECIFIC" && level !== "SPECIFIC") {
-      console.warn('Invalid specificityLevel, defaulting to GENERIC');
-      return {
-        specificityLevel: "GENERIC",
-        clarifyingQuestions: parsed.clarifyingQuestions || null,
-        refinedSuggestions: null,
-        feedback: parsed.feedback || null,
-      };
-    }
+    // {"specificityLevel": "GENERIC" | "SPECIFIC", "clarifyingQuestions": [...], "refinedSuggestions": null, "feedback": "..."}
+    const parsed = JSON.parse(result.text.trim().replaceAll('`', '').replace("json", ""));
 
     return {
-      specificityLevel: level,
+      specificityLevel: parsed.specificityLevel,
       clarifyingQuestions: parsed.clarifyingQuestions || null,
-      refinedSuggestions: parsed.refinedSuggestions || null,
+      refinedSuggestions: null, // First sessions don't need refined suggestions
       feedback: parsed.feedback || null,
     };
   } catch (error) {

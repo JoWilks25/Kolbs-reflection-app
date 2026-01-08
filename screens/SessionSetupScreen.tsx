@@ -51,6 +51,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     feedback: string | null;
   } | null>(null);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
+  const [warningShown, setWarningShown] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -134,9 +135,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
       const result = await analyzeIntentForFirstSession(
         intentText,
         practiceAreaName,
-        practiceAreaType,
-        practiceAreaId,
-        null // currentSessionId is null during session setup
+        practiceAreaType
       );
 
       setAnalysis(result);
@@ -187,6 +186,39 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
         return;
       }
 
+      // If warning was shown, user is clicking through - proceed with session creation
+      if (warningShown) {
+        setWarningShown(false);
+        // Continue to session creation below
+      } else if (previousStep4Answer === null && aiAvailable && !warningShown) {
+        // First session with AI available - check intent specificity
+        setIsAnalyzing(true);
+        try {
+          const result = await analyzeIntentForFirstSession(
+            intentText,
+            practiceAreaName,
+            practiceAreaType
+          );
+
+          if (result.specificityLevel === "GENERIC") {
+            // Show warning with clarifying questions
+            setAnalysis(result);
+            setWarningShown(true);
+            setIsAnalyzing(false);
+            return; // Don't create session yet
+          } else {
+            // SPECIFIC - proceed with session creation
+            setWarningShown(false);
+            setIsAnalyzing(false);
+            // Continue to session creation below
+          }
+        } catch (error) {
+          console.error("Error analyzing intent:", error);
+          setIsAnalyzing(false);
+          // Continue to session creation on error (graceful degradation)
+        }
+      }
+
       // Get last session ID for sequential linking
       const lastSessionId = await getLastSessionId(practiceAreaId);
 
@@ -222,7 +254,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     }
   };
 
-  const isStartDisabled = intentText.trim().length === 0;
+  const isStartDisabled = intentText.trim().length === 0 || isAnalyzing;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -274,41 +306,12 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
                   setAnalysis(null);
                   setSelectedSuggestionIndex(null);
                 }
+                // Reset warning state when user edits intent
+                setWarningShown(false);
               }}
               textAlignVertical="top"
             />
 
-            {/* Improve Intent button - only show if AI available */}
-            {aiAvailable && previousStep4Answer === null && (
-              <TouchableOpacity
-                style={[
-                  styles.improveButton,
-                  (intentText.trim().length < 5 || isAnalyzing) && styles.improveButtonDisabled
-                ]}
-                onPress={handleImproveIntent}
-                disabled={intentText.trim().length < 5 || isAnalyzing}
-                activeOpacity={0.7}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <ActivityIndicator size="small" color={COLORS.primary} />
-                    <Text style={styles.improveButtonText}>Analyzing...</Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.improveButtonIcon}>✨</Text>
-                    <Text style={styles.improveButtonText}>Improve Intent</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {/* Help text */}
-            {aiAvailable && !analysis && !isAnalyzing && previousStep4Answer === null && (
-              <Text style={styles.helpText}>
-                Optional: Get AI help to make your intent more specific
-              </Text>
-            )}
           </View>
 
           {/* Analysis Results */}
@@ -450,9 +453,18 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
             disabled={isStartDisabled}
             activeOpacity={0.7}
           >
-            <Text style={[styles.startButtonText, isStartDisabled && styles.startButtonTextDisabled]}>
-              Start Session
-            </Text>
+            {isAnalyzing ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
+                <ActivityIndicator size="small" color={COLORS.text.inverse} />
+                <Text style={[styles.startButtonText, isStartDisabled && styles.startButtonTextDisabled]}>
+                  Analyzing...
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.startButtonText, isStartDisabled && styles.startButtonTextDisabled]}>
+                {warningShown ? "Start Session Anyway" : "Start Session"}
+              </Text>
+            )}
           </TouchableOpacity>
         </>
       )}

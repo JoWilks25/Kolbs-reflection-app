@@ -219,70 +219,89 @@ export const buildIntentAnalysisPrompt = (
   practiceAreaType: PracticeAreaType,
 ): string => {
 
-  // Classification formulas by type (simplified two-tier)
+  // Classification formulas by type (element counting)
   const formulas = {
     solo_skill: {
-      generic: 'Practice area name only OR just "practice"',
-      actionable: 'Has technique, material, tempo, or focus area',
+      elements: 'technique, material, tempo/target, focus area',
+      generic: '0 elements (just medium/instrument)',
+      actionable: '>=1 elements',
       examples: {
-        generic: '"practice", "practice violin", "work on coding"',
-        actionable: '"practice scales", "read Ulysses", "scales at 80 BPM", "work on bowing technique"'
+        generic: '"practice", "practice guitar", "work on coding"',
+        actionable: '"practice scales" (technique), "read chapter 3" (material), "scales at 80 BPM" (technique+tempo)'
       }
     },
     performance: {
-      generic: 'Performance type only OR just "practice"',
-      actionable: 'Has section, scenario, challenge, or technique',
+      elements: 'section, scenario, challenge, technique',
+      generic: '0 elements (just performance type)',
+      actionable: '>=1 elements',
       examples: {
         generic: '"practice", "practice presentation", "work on performance"',
-        actionable: '"work on Q&A", "manage nervousness", "Q&A with 3-sec pause", "practice opening"'
+        actionable: '"practice Q&A" (section), "manage nervousness" (challenge), "Q&A with 3-sec pause" (section+technique)'
       }
     },
     interpersonal: {
-      generic: 'Skill name only OR just "practice"',
-      actionable: 'Has person and situation/topic',
+      elements: 'person, situation/topic',
+      generic: '0-1 elements (missing person OR topic)',
+      actionable: '2 elements (person AND topic required)',
       examples: {
-        generic: '"practice", "practice communication", "work on listening"',
-        actionable: '"discuss chores with partner", "set boundaries with manager", "give feedback to team"'
+        generic: '"practice", "practice communication", "talk to partner" (person only)',
+        actionable: '"discuss chores with partner" (person+topic), "set boundaries with manager" (person+topic)'
       }
     },
     creative: {
-      generic: 'Medium only OR just "practice"',
-      actionable: 'Has genre, theme, focus, or constraint',
+      elements: 'genre, theme, focus, constraint',
+      generic: '0 elements (just medium)',
+      actionable: '>=1 elements',
       examples: {
         generic: '"practice", "practice writing", "work on art"',
-        actionable: '"write fiction", "brainstorm ideas", "draw portraits", "write 500 words dialogue-only"'
+        actionable: '"write fiction" (genre), "brainstorm ideas" (activity), "write 500 words" (constraint)'
       }
     }
   };
 
   const f = formulas[practiceAreaType];
 
-  return `Classify this first session practice intent as GENERIC or ACTIONABLE.
+  return `Classify this first session practice intent as GENERIC or SPECIFIC.
 
 Practice Area: ${practiceAreaName} (${practiceAreaType})
 User intent: "${userIntent}"
 
-CLASSIFICATION FOR ${practiceAreaType}:
+ELEMENT COUNTING FOR ${practiceAreaType}:
 
-GENERIC (too vague) = ${f.generic}
+Elements to identify: ${f.elements}
+
+GENERIC = ${f.generic}
   Examples: ${f.examples.generic}
   
-ACTIONABLE (good enough) = ${f.actionable}
+SPECIFIC = ${f.actionable}
   Examples: ${f.examples.actionable}
 
+CLASSIFICATION STEPS:
+1. Identify which elements from the list are present in the intent
+2. Count the elements
+3. Apply the rule: ${f.generic} → GENERIC, ${f.actionable} → SPECIFIC
+
 RULES:
-- Default to ACTIONABLE when in doubt
-- "practice [something specific]" is ACTIONABLE, not GENERIC
-- ACTIONABLE includes both basic ("practice scales") and detailed ("scales at 80 BPM")
+- Default to SPECIFIC when in doubt
+- "practice [something]" where [something] is from the elements list → SPECIFIC
+- Just naming the practice area/medium → GENERIC
 
 FIRST SESSION GUIDANCE:
 - If GENERIC: Ask 2-3 open-ended clarifying questions to help user identify what aspect to practice
-- If ACTIONABLE: Accept immediately and start session. No refinement suggestions needed.
+- If SPECIFIC: Accept immediately and start session. No refinement suggestions needed.
 
-OUTPUT JSON:
+CRITICAL OUTPUT RULES:
+- specificityLevel must be "GENERIC" or "SPECIFIC"
+- refinedSuggestions must always be null for first sessions
+- If specificityLevel is "SPECIFIC", clarifyingQuestions must be null
+- If specificityLevel is "GENERIC", clarifyingQuestions must be an array with 2-3 questions
+
+ONLY OUTPUT SHOULD BE JSON IN THIS FORMAT:
 {
-  "classification": "GENERIC" | "ACTIONABLE",
+  "specificityLevel": "GENERIC" | "SPECIFIC",
   "clarifyingQuestions": ["question1", "question2"] | null,
-  "feedback": "brief explanation of classification"
-}`.trim();
+  "refinedSuggestions": null,
+  "feedback": "brief explanation showing element count and classification reasoning"
+}
+`.trim();
 };
