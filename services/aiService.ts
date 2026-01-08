@@ -36,16 +36,27 @@ export const checkAIAvailability = async (): Promise<boolean> => {
     return false;
   }
 
-  // Check iOS version (must be >= 26)
-  const iosVersion = parseInt(Platform.Version as string, 10);
+  if (!apple.isAvailable()) {
+    console.log('Apple Intelligence not available - using fallback');
+    return false;
+  }
+
+  // Debug: Log what Platform.Version actually returns
+  const versionString = Platform.Version as string;
+  const iosVersion = parseInt(versionString, 10);
+
+  console.log('AI Availability Check:', {
+    platform: Platform.OS,
+    versionString,
+    iosVersion,
+    meetsRequirement: iosVersion >= 26,
+  });
+
   if (iosVersion < 26) {
     console.log(`AI unavailable: iOS ${iosVersion} < 26`);
     return false;
   }
 
-  // The apple() provider doesn't expose isAvailable, so we check version only
-  // Actual hardware availability will be determined when we try to use it
-  // (errors will be caught gracefully in generatePlaceholder/generateFollowup)
   console.log('AI availability check: iOS version supported');
   return true;
 };

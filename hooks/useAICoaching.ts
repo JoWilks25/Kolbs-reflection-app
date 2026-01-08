@@ -12,8 +12,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
-import { 
-  generatePlaceholder, 
+import {
+  generatePlaceholder,
   generateFollowup,
   type AIContext,
 } from '../services/aiService';
@@ -50,7 +50,7 @@ export const useAICoaching = (
   options: UseAICoachingOptions = {},
 ): UseAICoachingResult => {
   const { previousStep4Answer = null } = options;
-  
+
   // Get state from Zustand store
   const currentPracticeArea = useAppStore((state) => state.currentPracticeArea);
   const currentSession = useAppStore((state) => state.currentSession);
@@ -58,23 +58,24 @@ export const useAICoaching = (
   const aiAvailable = useAppStore((state) => state.aiAvailable);
   const aiEnabled = useAppStore((state) => state.aiEnabled);
   const incrementAiMetric = useAppStore((state) => state.incrementAiMetric);
-  
+
   // Local state
   const [placeholder, setPlaceholder] = useState<string | null>(null);
   const [followup, setFollowup] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Determine if AI is active for this reflection
   const aiActive = aiAvailable && aiEnabled && reflectionDraft.aiAssisted;
-  
+
   /**
    * Build context object for AI generation
    */
   const buildContext = useCallback((): AIContext | null => {
+    console.log({ currentPracticeArea, currentSession, reflectionDraft })
     if (!currentPracticeArea || !currentSession || !reflectionDraft.coachingTone) {
       return null;
     }
-    
+
     return {
       practiceAreaName: currentPracticeArea.name,
       practiceAreaType: currentPracticeArea.type,
@@ -87,25 +88,28 @@ export const useAICoaching = (
       },
     };
   }, [currentPracticeArea, currentSession, reflectionDraft, previousStep4Answer]);
-  
+
   /**
    * Generate placeholder on mount (when AI is active)
    */
   useEffect(() => {
     const fetchPlaceholder = async () => {
+      console.log('aiActive', aiActive)
       if (!aiActive) {
         setPlaceholder(null);
         return;
       }
-      
+
       const context = buildContext();
+      console.log('context', context)
+
       if (!context) return;
-      
+
       setIsLoading(true);
       try {
         const result = await generatePlaceholder(context, step);
         setPlaceholder(result);
-        
+
         if (result) {
           incrementAiMetric('aiPlaceholdersShown');
         }
@@ -116,35 +120,35 @@ export const useAICoaching = (
         setIsLoading(false);
       }
     };
-    
+
     fetchPlaceholder();
     // Only regenerate when step changes or AI becomes active
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, aiActive]);
-  
+
   /**
    * Check if a follow-up question should be generated based on answer length
    */
   const checkForFollowup = useCallback(async (userAnswer: string) => {
     // Clear existing follow-up
     setFollowup(null);
-    
+
     if (!aiActive) {
       return;
     }
-    
+
     // Only show follow-up for brief answers (< 50 chars)
     if (userAnswer.length >= 50 || userAnswer.length === 0) {
       return;
     }
-    
+
     const context = buildContext();
     if (!context) return;
-    
+
     try {
       const result = await generateFollowup(context, step, userAnswer);
       setFollowup(result);
-      
+
       if (result) {
         incrementAiMetric('aiFollowupsShown');
       }
@@ -153,7 +157,7 @@ export const useAICoaching = (
       setFollowup(null);
     }
   }, [aiActive, buildContext, step, incrementAiMetric]);
-  
+
   /**
    * Track when user answers a follow-up question
    */
@@ -163,7 +167,7 @@ export const useAICoaching = (
       setFollowup(null); // Clear after answered
     }
   }, [followup, incrementAiMetric]);
-  
+
   return {
     placeholder,
     followup,

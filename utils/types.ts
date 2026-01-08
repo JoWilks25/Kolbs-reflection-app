@@ -205,6 +205,7 @@ export interface AppActions {
   startSession: (session: Session, targetDuration?: number | null) => void;
   updateTimer: () => void;
   endSession: () => void;
+  setCurrentSession: (session: Session | null) => void;
   setLastEndedSessionId: (sessionId: string | null) => void;
   clearLastEndedSession: () => void;
 

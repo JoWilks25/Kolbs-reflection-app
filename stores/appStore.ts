@@ -145,6 +145,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })),
 
   /**
+   * Set the current session (for reflection context)
+   */
+  setCurrentSession: (session: Session | null) => set({ currentSession: session }),
+
+  /**
    * Set the last ended session ID (for reflection flow from timeline)
    */
   setLastEndedSessionId: (sessionId: string | null) => set({ lastEndedSessionId: sessionId }),

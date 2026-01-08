@@ -16,6 +16,7 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { useAppStore } from "../stores/appStore";
+import { useAICoaching } from "../hooks/useAICoaching";
 import { getSessionById, getPracticeAreaById, getReflectionBySessionId } from "../db/queries";
 import { COLORS, SPACING, TYPOGRAPHY, APP_CONSTANTS, TONE_PROMPTS } from "../utils/constants";
 import type { CoachingTone } from "../utils/types";
@@ -100,6 +101,8 @@ const ReflectionPromptsScreen: React.FC = () => {
     reflectionDraft,
     updateReflectionDraft,
     setCoachingTone,
+    setCurrentPracticeArea,
+    setCurrentSession,
   } = useAppStore();
 
   const [practiceAreaName, setPracticeAreaName] = useState<string>("");
@@ -111,6 +114,10 @@ const ReflectionPromptsScreen: React.FC = () => {
 
   const inputRef = useRef<TextInput>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // AI Coaching integration - convert 0-indexed step to Kolb step (2, 3, or 4)
+  const kolbStep = (currentStepIndex + 2) as 2 | 3 | 4;
+  const { placeholder, isLoading: aiLoading, aiActive } = useAICoaching(kolbStep);
 
   // Determine if we're in edit mode
   const isEditMode = route.params?.editMode || false;
@@ -163,9 +170,14 @@ const ReflectionPromptsScreen: React.FC = () => {
 
         setCurrentSessionId(sessionId);
 
+        // Set session in store for AI hook
+        setCurrentSession(session);
+
         const practiceArea = await getPracticeAreaById(session.practice_area_id);
         if (practiceArea) {
           setPracticeAreaName(practiceArea.name);
+          // Set practice area in store for AI hook
+          setCurrentPracticeArea(practiceArea);
         }
         setSessionIntent(session.intent);
 
@@ -280,9 +292,14 @@ const ReflectionPromptsScreen: React.FC = () => {
 
         setCurrentSessionId(sessionId);
 
+        // Set session in store for AI hook
+        setCurrentSession(session);
+
         const practiceArea = await getPracticeAreaById(session.practice_area_id);
         if (practiceArea) {
           setPracticeAreaName(practiceArea.name);
+          // Set practice area in store for AI hook
+          setCurrentPracticeArea(practiceArea);
         }
         setSessionIntent(session.intent);
 
@@ -421,6 +438,16 @@ const ReflectionPromptsScreen: React.FC = () => {
     }
   };
 
+  // Handle tapping AI placeholder chip - inserts placeholder text into input
+  const handleUsePlaceholder = () => {
+    if (placeholder) {
+      const field = getCurrentField();
+      updateReflectionDraft(field, placeholder);
+      // Focus the input so user can continue typing
+      inputRef.current?.focus();
+    }
+  };
+
   // Navigation handlers
   const handleBack = () => {
     if (currentStepIndex === 0) {
@@ -504,6 +531,26 @@ const ReflectionPromptsScreen: React.FC = () => {
 
         {/* Text Input */}
         <View style={styles.inputSection}>
+          {/* AI Placeholder Chip - shown when AI active and field is empty */}
+          {aiActive && placeholder && !getCurrentValue() && (
+            <TouchableOpacity
+              style={styles.placeholderChip}
+              onPress={handleUsePlaceholder}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.placeholderChipText}>{placeholder}</Text>
+              <Text style={styles.tapToUseText}>Tap to use</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* AI Loading Indicator - shown while generating placeholder */}
+          {aiActive && aiLoading && !getCurrentValue() && !placeholder && (
+            <View style={styles.aiLoadingContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.aiLoadingText}>Generating suggestion...</Text>
+            </View>
+          )}
+
           <TextInput
             ref={inputRef}
             style={styles.textInput}
@@ -705,6 +752,40 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.xs,
     color: COLORS.warning,
     fontStyle: "italic",
+  },
+  placeholderChip: {
+    backgroundColor: COLORS.neutral[100],
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral[300],
+    borderStyle: "dashed",
+  },
+  placeholderChipText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.secondary,
+    fontStyle: "italic",
+    lineHeight: TYPOGRAPHY.fontSize.md * TYPOGRAPHY.lineHeight.normal,
+  },
+  tapToUseText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    marginTop: SPACING.xs,
+  },
+  aiLoadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.neutral[100],
+    borderRadius: 12,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  aiLoadingText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
   },
   buttonContainer: {
     flexDirection: "row",
