@@ -12,8 +12,10 @@
 import { apple } from '@react-native-ai/apple';
 import { generateText } from 'ai';
 import { Platform } from 'react-native';
-import { buildPlaceholderPrompt, buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, getTonePromptForStep, type AIContext } from './promptService';
+import { buildPlaceholderPrompt, buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, type AIContext } from './promptService';
 import type { CoachingTone, PracticeAreaType } from '../utils/types';
+import { getSessionCount, getRecentIntents } from '../db/queries';
+import { TONE_PROMPTS } from '../utils/constants';
 
 // Re-export AIContext for consumers
 export type { AIContext } from './promptService';
@@ -142,6 +144,26 @@ export const generateStepQuestion = async (
 };
 
 /**
+ * Get tone-adapted prompt for a specific step
+ * 
+ * @param tone - Coaching tone (1=Facilitative, 2=Socratic, 3=Supportive)
+ * @param step - Kolb step (2, 3, or 4)
+ * @returns Static prompt string for the given tone and step
+ */
+const getTonePromptForStep = (
+  tone: CoachingTone,
+  step: 2 | 3 | 4,
+): string => {
+  if (step === 2) {
+    return TONE_PROMPTS[tone].step2;
+  } else if (step === 3) {
+    return TONE_PROMPTS[tone].step3;
+  } else {
+    return TONE_PROMPTS[tone].step4;
+  }
+};
+
+/**
  * Get static fallback prompt when AI is unavailable or fails
  * 
  * @param tone - Coaching tone (1=Facilitative, 2=Socratic, 3=Supportive)
@@ -208,36 +230,70 @@ export const generateFollowup = async (
  * @param practiceAreaName - Name of the practice area
  * @param practiceAreaType - Type of practice area
  * @param previousStep4Answer - Previous session's step 4 answer (next action), or null
+ * @param practiceAreaId - The ID of the practice area (for fetching session history)
+ * @param currentSessionId - Optional current session ID to exclude from recent intents (null during session setup)
  * @returns Analysis result with specificity flag, suggestion, and reasoning
  */
-export const analyzeIntent = async (
+export const analyzeIntentForFirstSession = async (
   userIntent: string,
   practiceAreaName: string,
   practiceAreaType: PracticeAreaType,
-  previousStep4Answer: string | null
+  practiceAreaId: string,
+  currentSessionId: string | null = null
 ): Promise<{
-  isSpecific: boolean;
+  specificityLevel: "GENERIC" | "PARTIALLY_SPECIFIC" | "SPECIFIC";
   clarifyingQuestions: string[] | null;
+  refinedSuggestions: string[] | null;
   feedback: string | null;
 }> => {
   // Validate minimum length
   if (userIntent.trim().length < 5) {
     return {
-      isSpecific: false,
+      specificityLevel: "GENERIC",
       clarifyingQuestions: null,
+      refinedSuggestions: null,
       feedback: "Intent too short - add more detail"
     };
+  }
+
+  // Fetch session count first to optimize query
+  let sessionCount = 0;
+  let recentIntents: Array<{ sessionNumber: number; daysAgo: number; intent: string }> = [];
+
+  try {
+    sessionCount = await getSessionCount(practiceAreaId);
+
+    // If it's the first session, skip the recent intents query
+    if (sessionCount === 0) {
+      // First session - use empty array and count = 1 (the session being created)
+      recentIntents = [];
+      sessionCount = 1;
+    } else {
+      // Fetch recent intents and increment count for the session being created
+      try {
+        recentIntents = await getRecentIntents(practiceAreaId, currentSessionId, 3);
+      } catch (error) {
+        console.error('Failed to fetch recent intents:', error);
+        recentIntents = []; // Fallback to empty array
+      }
+      sessionCount = sessionCount + 1; // Account for the session being created
+    }
+  } catch (error) {
+    console.error('Failed to fetch session count:', error);
+    // Fallback: treat as first session
+    sessionCount = 1;
+    recentIntents = [];
   }
 
   const prompt = buildIntentAnalysisPrompt(
     userIntent,
     practiceAreaName,
     practiceAreaType,
-    previousStep4Answer
   );
 
   try {
     const startTime = Date.now();
+    console.log('prompt', prompt)
     const result = await generateText({
       model: apple() as any, // Type assertion to work around dependency version mismatch
       prompt,
@@ -251,20 +307,34 @@ export const analyzeIntent = async (
     }
 
     // Parse response: expect JSON format
-    // {"isSpecific": true/false, "clarifyingQuestions": [...], "feedback": "..."}
-    const test = result.text.replaceAll('`', '').replace("json", "")
-    const parsed = JSON.parse(test);
+    // {"specificityLevel": "GENERIC" | "PARTIALLY_SPECIFIC" | "SPECIFIC", "clarifyingQuestions": [...], "refinedSuggestions": [...], "feedback": "..."}
+    const parsed = JSON.parse(result.text.replaceAll('`', '').replace("json", ""));
+    console.log('parsed', parsed)
+    // Validate specificityLevel
+    const level = parsed.specificityLevel;
+    if (level !== "GENERIC" && level !== "PARTIALLY_SPECIFIC" && level !== "SPECIFIC") {
+      console.warn('Invalid specificityLevel, defaulting to GENERIC');
+      return {
+        specificityLevel: "GENERIC",
+        clarifyingQuestions: parsed.clarifyingQuestions || null,
+        refinedSuggestions: null,
+        feedback: parsed.feedback || null,
+      };
+    }
+
     return {
-      isSpecific: parsed.isSpecific === true,
+      specificityLevel: level,
       clarifyingQuestions: parsed.clarifyingQuestions || null,
+      refinedSuggestions: parsed.refinedSuggestions || null,
       feedback: parsed.feedback || null,
     };
   } catch (error) {
     console.error('Intent analysis failed:', error);
     // Return error state
     return {
-      isSpecific: false,
+      specificityLevel: "GENERIC",
       clarifyingQuestions: null,
+      refinedSuggestions: null,
       feedback: "Analysis unavailable - please try again"
     };
   }

@@ -305,6 +305,71 @@ export async function getLastSessionId(practiceAreaId: string): Promise<string |
 }
 
 /**
+ * Get the count of non-deleted sessions for a practice area
+ * @param practiceAreaId - The ID of the practice area
+ * @returns Count of sessions (0 if none exist)
+ */
+export async function getSessionCount(practiceAreaId: string): Promise<number> {
+  const db = getDatabase();
+  const result = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM sessions
+     WHERE practice_area_id = ?
+       AND is_deleted = 0`,
+    [practiceAreaId]
+  );
+  return result?.count ?? 0;
+}
+
+/**
+ * Get recent session intents for a practice area
+ * @param practiceAreaId - The ID of the practice area
+ * @param currentSessionId - Optional session ID to exclude from results (null during session setup)
+ * @param limit - Maximum number of recent intents to return (default: 3)
+ * @returns Array of recent intents with session number, days ago, and intent text
+ */
+export async function getRecentIntents(
+  practiceAreaId: string,
+  currentSessionId: string | null = null,
+  limit: number = 3
+): Promise<Array<{ sessionNumber: number; daysAgo: number; intent: string }>> {
+  const db = getDatabase();
+  const now = Date.now();
+
+  // Build query with conditional exclusion of currentSessionId
+  let query = `
+    SELECT 
+      ROW_NUMBER() OVER (ORDER BY started_at ASC) as sessionNumber,
+      intent,
+      started_at
+    FROM sessions
+    WHERE practice_area_id = ?
+      AND is_deleted = 0
+  `;
+
+  const params: any[] = [practiceAreaId];
+
+  if (currentSessionId) {
+    query += ` AND id != ?`;
+    params.push(currentSessionId);
+  }
+
+  query += ` ORDER BY started_at DESC LIMIT ?`;
+  params.push(limit);
+
+  const sessions = await db.getAllAsync<{
+    sessionNumber: number;
+    intent: string;
+    started_at: number;
+  }>(query, params);
+
+  return sessions.map(s => ({
+    sessionNumber: s.sessionNumber,
+    daysAgo: Math.floor((now - s.started_at) / (1000 * 60 * 60 * 24)),
+    intent: s.intent,
+  }));
+}
+
+/**
  * Check if the last session in a practice area has a pending reflection
  * @param practiceAreaId - The ID of the practice area
  * @returns Object with hasPending flag and session info, or null if no last session

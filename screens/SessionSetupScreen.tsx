@@ -13,10 +13,10 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS } from "../utils/constants";
-import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, createSession, getBlockingUnreflectedSession } from "../db/queries";
+import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, createSession, getBlockingUnreflectedSession, getSessionCount } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
 import { generateId } from "../utils/uuid";
-import { analyzeIntent } from "../services/aiService";
+import { analyzeIntentForFirstSession } from "../services/aiService";
 import type { PracticeAreaType } from "../utils/types";
 
 type SessionSetupScreenRouteProp = RouteProp<RootStackParamList, "SessionSetup">;
@@ -45,10 +45,12 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
   // Intent analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<{
-    isSpecific: boolean;
+    specificityLevel: "GENERIC" | "PARTIALLY_SPECIFIC" | "SPECIFIC";
     clarifyingQuestions: string[] | null;
+    refinedSuggestions: string[] | null;
     feedback: string | null;
   } | null>(null);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -129,29 +131,48 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     setAnalysis(null); // Clear previous analysis
 
     try {
-      const result = await analyzeIntent(
+      const result = await analyzeIntentForFirstSession(
         intentText,
         practiceAreaName,
         practiceAreaType,
-        previousStep4Answer
+        practiceAreaId,
+        null // currentSessionId is null during session setup
       );
 
       setAnalysis(result);
+      setSelectedSuggestionIndex(null); // Clear selection when new analysis runs
     } catch (error) {
       console.error("Error analyzing intent:", error);
       setAnalysis({
-        isSpecific: false,
+        specificityLevel: "GENERIC",
         clarifyingQuestions: null,
+        refinedSuggestions: null,
         feedback: "Analysis unavailable - please try again",
       });
+      setSelectedSuggestionIndex(null);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // Dismiss analysis
-  const handleDismissSuggestion = () => {
-    setAnalysis(null);
+  const handleSelectSuggestion = (index: number) => {
+    setSelectedSuggestionIndex(index);
+  };
+
+  const handleUseSuggestion = () => {
+    if (
+      analysis &&
+      analysis.specificityLevel === "PARTIALLY_SPECIFIC" &&
+      analysis.refinedSuggestions &&
+      selectedSuggestionIndex !== null &&
+      selectedSuggestionIndex >= 0 &&
+      selectedSuggestionIndex < analysis.refinedSuggestions.length
+    ) {
+      const selectedSuggestion = analysis.refinedSuggestions[selectedSuggestionIndex];
+      setIntentText(selectedSuggestion);
+      setAnalysis(null);
+      setSelectedSuggestionIndex(null);
+    }
   };
 
   const handleStartSession = async () => {
@@ -180,7 +201,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
         previous_session_id: lastSessionId, // NULL for first session
         intent: intentText.trim(),
         intent_refined: intentRefined ? 1 : 0,
-        original_intent: intentRefined ? originalIntentBeforeRefinement : null,
+        original_intent: null, // No longer tracking original intent since we use clarifying questions
         intent_analysis_requested: intentAnalysisRequested ? 1 : 0,
         target_duration_seconds: selectedDuration,
         started_at: Date.now(),
@@ -248,14 +269,17 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
               value={intentText}
               onChangeText={(text) => {
                 setIntentText(text);
-                // Clear analysis when user edits
-                if (analysis) setAnalysis(null);
+                // Clear analysis and selection when user edits
+                if (analysis) {
+                  setAnalysis(null);
+                  setSelectedSuggestionIndex(null);
+                }
               }}
               textAlignVertical="top"
             />
 
             {/* Improve Intent button - only show if AI available */}
-            {aiAvailable && (
+            {aiAvailable && previousStep4Answer === null && (
               <TouchableOpacity
                 style={[
                   styles.improveButton,
@@ -280,7 +304,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
             )}
 
             {/* Help text */}
-            {aiAvailable && !analysis && !isAnalyzing && (
+            {aiAvailable && !analysis && !isAnalyzing && previousStep4Answer === null && (
               <Text style={styles.helpText}>
                 Optional: Get AI help to make your intent more specific
               </Text>
@@ -290,7 +314,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
           {/* Analysis Results */}
           {analysis && (
             <View style={styles.analysisContainer}>
-              {analysis.isSpecific ? (
+              {analysis.specificityLevel === "SPECIFIC" ? (
                 // Positive feedback - intent is already good
                 <View style={styles.positiveContainer}>
                   <Text style={styles.positiveIcon}>✓</Text>
@@ -301,8 +325,62 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
                     )}
                   </View>
                 </View>
+              ) : analysis.specificityLevel === "PARTIALLY_SPECIFIC" ? (
+                // Refined suggestions - user can select one
+                <View style={styles.suggestionContainer}>
+                  <View style={styles.suggestionHeader}>
+                    <Text style={styles.suggestionIcon}>💡</Text>
+                    <Text style={styles.suggestionTitle}>Refined suggestions</Text>
+                  </View>
+
+                  {analysis.feedback && (
+                    <Text style={styles.suggestionReasoning}>
+                      {analysis.feedback}
+                    </Text>
+                  )}
+
+                  {analysis.refinedSuggestions && analysis.refinedSuggestions.length > 0 ? (
+                    <>
+                      <View style={styles.suggestionsList}>
+                        {analysis.refinedSuggestions.map((suggestion, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={[
+                              styles.suggestionItem,
+                              selectedSuggestionIndex === index && styles.suggestionItemSelected,
+                            ]}
+                            onPress={() => handleSelectSuggestion(index)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[
+                              styles.suggestionText,
+                              selectedSuggestionIndex === index && styles.suggestionTextSelected,
+                            ]}>
+                              {suggestion}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      {selectedSuggestionIndex !== null && (
+                        <TouchableOpacity
+                          style={styles.useSuggestionButton}
+                          onPress={handleUseSuggestion}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.useSuggestionButtonText}>Use this suggestion</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  ) : (
+                    // Error state - no suggestions available
+                    <Text style={styles.errorText}>
+                      {analysis.feedback || "No suggestions available"}
+                    </Text>
+                  )}
+                </View>
               ) : (
-                // Clarifying questions - intent needs improvement
+                // GENERIC - Clarifying questions - intent needs improvement
                 <View style={styles.suggestionContainer}>
                   <View style={styles.suggestionHeader}>
                     <Text style={styles.suggestionIcon}>💡</Text>
@@ -324,24 +402,6 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
                             <Text style={styles.questionText}>{question}</Text>
                           </View>
                         ))}
-                      </View>
-
-                      <View style={styles.suggestionButtons}>
-                        <TouchableOpacity
-                          style={styles.suggestionButtonSecondary}
-                          onPress={handleDismissSuggestion}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.suggestionButtonSecondaryText}>Keep Mine</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.suggestionButtonSecondary}
-                          onPress={handleImproveIntent}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.suggestionButtonSecondaryText}>Improve Again</Text>
-                        </TouchableOpacity>
                       </View>
                     </>
                   ) : (
@@ -700,6 +760,39 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
     fontSize: TYPOGRAPHY.fontSize.sm,
+  },
+  suggestionsList: {
+    marginBottom: SPACING.md,
+  },
+  suggestionItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 2,
+    borderColor: COLORS.neutral[200],
+  },
+  suggestionItemSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#F0F7FF",
+  },
+  suggestionTextSelected: {
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  useSuggestionButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: SPACING.xs,
+  },
+  useSuggestionButtonText: {
+    color: COLORS.text.inverse,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   errorText: {
     fontSize: TYPOGRAPHY.fontSize.sm,

@@ -49,15 +49,6 @@ const TYPE_MODIFIERS: Record<PracticeAreaType, string> = {
 };
 
 /**
- * Step-specific instructions for placeholder generation
- */
-const PLACEHOLDER_STEP_INSTRUCTIONS: Record<2 | 3 | 4, string> = {
-  2: `Generate a brief placeholder starter (3-6 words) for describing what happened during practice. Example: "I focused on..." or "The main challenge was..."`,
-  3: `Generate a brief placeholder starter (3-6 words) for identifying a lesson or pattern. Example: "I noticed that..." or "The key insight was..."`,
-  4: `Generate a brief placeholder starter (3-6 words) for planning next steps. Example: "Next time I will..." or "I want to try..."`,
-};
-
-/**
  * Step-specific guidance for question generation
  */
 const STEP_QUESTION_GUIDANCE: Record<2 | 3 | 4, string> = {
@@ -95,35 +86,6 @@ const FOLLOWUP_MATRIX: Record<CoachingTone, Record<PracticeAreaType, string>> = 
     interpersonal: 'What felt uncomfortable, and how did you navigate it?',
     creative: 'What moments felt like you were in flow?',
   },
-};
-
-/**
- * Build a prompt for generating placeholder starter text
- * 
- * @param context - AI context with practice area, intent, and tone info
- * @param step - Kolb step (2, 3, or 4)
- * @returns Full prompt string for the LLM
- */
-export const buildPlaceholderPrompt = (
-  context: AIContext,
-  step: 2 | 3 | 4,
-): string => {
-  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
-  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
-  const stepInstruction = PLACEHOLDER_STEP_INSTRUCTIONS[step];
-
-  return `${tonePrompt}
-
-${typeModifier}
-
-Context:
-- Practice Area: ${context.practiceAreaName}
-- Today's Intent: ${context.sessionIntent}
-${context.previousStep4Answer ? `- Previous Session Goal: ${context.previousStep4Answer}` : ''}
-
-${stepInstruction}
-
-Respond with ONLY the placeholder text, nothing else.`;
 };
 
 /**
@@ -250,158 +212,77 @@ export const buildStepQuestionPrompt = (
       Generate the question now:`.trim();
 };
 
-/**
- * Get the tone-adapted base prompt for each Kolb step
- * Used when AI is disabled but coaching tone is still selected
- */
-export const getTonePromptForStep = (
-  tone: CoachingTone,
-  step: 2 | 3 | 4,
-): string => {
-  const prompts: Record<CoachingTone, Record<2 | 3 | 4, string>> = {
-    1: { // Facilitative
-      2: "What happened during this practice? Which moments stood out to you most?",
-      3: "What are you noticing about yourself or your approach?",
-      4: "What do you feel ready to explore or try next time?",
-    },
-    2: { // Socratic
-      2: "What actually happened, step by step? What was different from what you expected?",
-      3: "Looking back, what worked and what didn't? What patterns are you seeing?",
-      4: "What specific change will you test in your next session?",
-    },
-    3: { // Supportive
-      2: "What happened in this session? What parts felt most challenging or successful?",
-      3: "What's the main thing you're taking away from this? What felt like progress?",
-      4: "What's one small thing you'll focus on next time?",
-    },
-  };
 
-  return prompts[tone][step];
-};
-
-/**
- * Build prompt for analyzing and refining session intents
- * Called when user explicitly clicks "Improve Intent" button
- * 
- * @param userIntent - The user's current intent text
- * @param practiceAreaName - Name of the practice area
- * @param practiceAreaType - Type of practice area (solo_skill, performance, interpersonal, creative)
- * @param previousStep4Answer - Previous session's step 4 answer (next action), or null
- * @returns Full prompt string for the LLM
- */
 export const buildIntentAnalysisPrompt = (
   userIntent: string,
   practiceAreaName: string,
   practiceAreaType: PracticeAreaType,
-  previousStep4Answer: string | null
 ): string => {
-  const typeGuidance = {
-    solo_skill: `For solo skill practice, specific intents should reference:
-- Concrete techniques or movements
-- Measurable targets (tempo, accuracy, duration)
-- Specific exercises or sections
-- Technical elements to focus on`,
 
-    performance: `For performance practice, specific intents should reference:
-- Specific scenarios or contexts (presentation section, game situation)
-- Audience or pressure elements
-- Particular anxieties or challenges to address
-- Preparation strategies to test`,
-
-    interpersonal: `For interpersonal practice, specific intents should reference:
-- Specific people or relationship types
-- Particular communication challenges or goals
-- Specific behaviors or approaches to try
-- Concrete situations or conversations`,
-
-    creative: `For creative practice, specific intents should reference:
-- Specific creative constraints or prompts
-- Particular techniques or styles to explore
-- Concrete experiments or variations to try
-- Specific materials or tools to work with`
+  // Classification formulas by type (simplified two-tier)
+  const formulas = {
+    solo_skill: {
+      generic: 'Practice area name only OR just "practice"',
+      actionable: 'Has technique, material, tempo, or focus area',
+      examples: {
+        generic: '"practice", "practice violin", "work on coding"',
+        actionable: '"practice scales", "read Ulysses", "scales at 80 BPM", "work on bowing technique"'
+      }
+    },
+    performance: {
+      generic: 'Performance type only OR just "practice"',
+      actionable: 'Has section, scenario, challenge, or technique',
+      examples: {
+        generic: '"practice", "practice presentation", "work on performance"',
+        actionable: '"work on Q&A", "manage nervousness", "Q&A with 3-sec pause", "practice opening"'
+      }
+    },
+    interpersonal: {
+      generic: 'Skill name only OR just "practice"',
+      actionable: 'Has person and situation/topic',
+      examples: {
+        generic: '"practice", "practice communication", "work on listening"',
+        actionable: '"discuss chores with partner", "set boundaries with manager", "give feedback to team"'
+      }
+    },
+    creative: {
+      generic: 'Medium only OR just "practice"',
+      actionable: 'Has genre, theme, focus, or constraint',
+      examples: {
+        generic: '"practice", "practice writing", "work on art"',
+        actionable: '"write fiction", "brainstorm ideas", "draw portraits", "write 500 words dialogue-only"'
+      }
+    }
   };
 
-  return `
-You are helping a user set a specific, actionable intent for a practice session.
+  const f = formulas[practiceAreaType];
+
+  return `Classify this first session practice intent as GENERIC or ACTIONABLE.
 
 Practice Area: ${practiceAreaName} (${practiceAreaType})
-${previousStep4Answer ? `Previous session goal: "${previousStep4Answer}"` : 'First session in this Practice Area'}
+User intent: "${userIntent}"
 
-User's intent: "${userIntent}"
+CLASSIFICATION FOR ${practiceAreaType}:
 
-Task: Analyze whether this intent is specific enough for effective practice.
+GENERIC (too vague) = ${f.generic}
+  Examples: ${f.examples.generic}
+  
+ACTIONABLE (good enough) = ${f.actionable}
+  Examples: ${f.examples.actionable}
 
-${typeGuidance[practiceAreaType]}
+RULES:
+- Default to ACTIONABLE when in doubt
+- "practice [something specific]" is ACTIONABLE, not GENERIC
+- ACTIONABLE includes both basic ("practice scales") and detailed ("scales at 80 BPM")
 
-Examples of GENERIC intents (need clarification):
-- "practice" → completely vague, no focus
-- "practice violin" → too broad, could mean anything
-- "practice piano" → no specific element identified
-- "get better at speaking" → not measurable, no specific goal
-- "work on coding" → no concrete task
-- "improve" → completely vague
+FIRST SESSION GUIDANCE:
+- If GENERIC: Ask 2-3 open-ended clarifying questions to help user identify what aspect to practice
+- If ACTIONABLE: Accept immediately and start session. No refinement suggestions needed.
 
-Examples of SPECIFIC intents (good as-is):
-- "increase tempo to 120 BPM on left-hand accents in F major"
-- "practice managing Q&A nervousness with pausing technique"
-- "implement error handling for the session list component"
-- "write 500 words using only dialogue tags"
-
-Instructions:
-1. First, determine if the intent is GENERIC or SPECIFIC:
-   - GENERIC intents are vague, mention only the practice area name, or lack focus
-   - SPECIFIC intents reference concrete elements and clear actions
-
-2. If GENERIC, DO NOT generate a suggestion. Instead:
-   - Ask 2-3 clarifying questions to help the user identify what specifically they want to practice
-   - Questions should guide them toward concrete techniques, songs, skills, or focus areas
-   - Reference the practice area name in your questions
-   - Keep questions conversational and helpful
-
-3. If SPECIFIC, provide brief positive feedback (10-15 words) confirming why it works well.
-
-Respond ONLY with valid JSON in this exact format:
+OUTPUT JSON:
 {
-  "isSpecific": true or false,
-  "clarifyingQuestions": ["question 1", "question 2"] or null (null if already specific),
-  "suggestion": null (deprecated - do not use),
-  "feedback": "brief explanation or encouragement"
-}
-
-Examples:
-
-Input: "practice violin"
-Output:
-{
-  "isSpecific": false,
-  "clarifyingQuestions": [
-    "Is there a specific piece or song you want to work on?",
-    "Are you focusing on a particular technique (e.g., bowing, vibrato, scales)?"
-  ],
-  "suggestion": null,
-  "feedback": "Too broad - needs specific focus within violin practice"
-}
-
-Input: "practice"
-Output:
-{
-  "isSpecific": false,
-  "clarifyingQuestions": [
-    "What aspect of ${practiceAreaName} do you want to focus on today?",
-    "Is there a specific technique, section, or skill you want to improve?"
-  ],
-  "suggestion": null,
-  "feedback": "Very vague - needs clear direction for the session"
-}
-
-Input: "increase tempo to 120 BPM on scales"
-Output:
-{
-  "isSpecific": true,
-  "clarifyingQuestions": null,
-  "suggestion": null,
-  "feedback": "Clear and measurable - references specific technique and target tempo"
-}
-`.trim();
+  "classification": "GENERIC" | "ACTIONABLE",
+  "clarifyingQuestions": ["question1", "question2"] | null,
+  "feedback": "brief explanation of classification"
+}`.trim();
 };
-
