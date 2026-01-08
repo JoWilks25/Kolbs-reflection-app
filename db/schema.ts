@@ -9,6 +9,10 @@
  * - Renamed 'format' to 'coaching_tone' in reflections (1=Facilitative, 2=Socratic, 3=Supportive)
  * - Added AI assistance fields: ai_assisted, ai_placeholders_shown, ai_followups_shown, ai_followups_answered
  * - Added index for AI analytics queries
+ * 
+ * v2.1 Changes:
+ * - Added ai_questions_shown field (replaces ai_placeholders_shown for new reflections)
+ * - Added step2_question, step3_question, step4_question fields to track actual generated questions
  */
 
 export const SCHEMA_SQL = `
@@ -49,9 +53,15 @@ CREATE TABLE IF NOT EXISTS reflections (
   step4_answer TEXT NOT NULL,            -- "Next action"
   
   -- AI interaction metrics (NEW in v2.0)
-  ai_placeholders_shown INTEGER DEFAULT 0,
+  ai_placeholders_shown INTEGER DEFAULT 0,  -- DEPRECATED: kept for backward compatibility
+  ai_questions_shown INTEGER DEFAULT 0,      -- NEW in v2.1: Count of AI-generated questions shown
   ai_followups_shown INTEGER DEFAULT 0,
   ai_followups_answered INTEGER DEFAULT 0,
+  
+  -- AI-generated question text (NEW in v2.1: tracks actual questions shown)
+  step2_question TEXT,  -- NULL if static prompt was used
+  step3_question TEXT,  -- NULL if static prompt was used
+  step4_question TEXT,  -- NULL if static prompt was used
   
   -- Feedback
   feedback_rating INTEGER,        -- 0=Confusing, 1=Hard, 2=Neutral, 3=Good, 4=Great, NULL if skipped

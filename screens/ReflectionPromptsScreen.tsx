@@ -17,10 +17,11 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { useAppStore } from "../stores/appStore";
 import { getSessionById, getPracticeAreaById, getReflectionBySessionId } from "../db/queries";
-import { COLORS, SPACING, TYPOGRAPHY, APP_CONSTANTS, TONE_PROMPTS } from "../utils/constants";
+import { COLORS, SPACING, TYPOGRAPHY, APP_CONSTANTS } from "../utils/constants";
 import type { CoachingTone } from "../utils/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from "react-native-toast-message";
+import { useAICoaching } from "../hooks/useAICoaching";
 
 type ReflectionPromptsScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -100,6 +101,8 @@ const ReflectionPromptsScreen: React.FC = () => {
     reflectionDraft,
     updateReflectionDraft,
     setCoachingTone,
+    setCurrentPracticeArea,
+    setCurrentSession,
   } = useAppStore();
 
   const [practiceAreaName, setPracticeAreaName] = useState<string>("");
@@ -111,6 +114,19 @@ const ReflectionPromptsScreen: React.FC = () => {
 
   const inputRef = useRef<TextInput>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get current step (2, 3, or 4) from index
+  const currentStep: 2 | 3 | 4 = (currentStepIndex + 2) as 2 | 3 | 4;
+
+  // Use AI coaching hook for dynamic questions
+  const {
+    stepQuestion,
+    followup,
+    isLoadingQuestion,
+    checkForFollowup,
+    markFollowupAnswered,
+    aiActive,
+  } = useAICoaching(currentStep);
 
   // Determine if we're in edit mode
   const isEditMode = route.params?.editMode || false;
@@ -166,8 +182,21 @@ const ReflectionPromptsScreen: React.FC = () => {
         const practiceArea = await getPracticeAreaById(session.practice_area_id);
         if (practiceArea) {
           setPracticeAreaName(practiceArea.name);
+          // Set in store for AI hook to access
+          // Convert PracticeArea to PracticeAreaWithStats (with minimal stats)
+          setCurrentPracticeArea({
+            ...practiceArea,
+            sessionCount: 0,
+            lastSessionDate: null,
+            pendingReflectionsCount: 0,
+            overdueReflectionsCount: 0,
+            oldestPendingReflectionDate: null,
+          });
         }
         setSessionIntent(session.intent);
+        
+        // Set session in store for AI hook to access (even though it's ended)
+        setCurrentSession(session);
 
         // Load draft/reflection based on mode
         if (isEditMode) {
@@ -283,8 +312,21 @@ const ReflectionPromptsScreen: React.FC = () => {
         const practiceArea = await getPracticeAreaById(session.practice_area_id);
         if (practiceArea) {
           setPracticeAreaName(practiceArea.name);
+          // Set in store for AI hook to access
+          // Convert PracticeArea to PracticeAreaWithStats (with minimal stats)
+          setCurrentPracticeArea({
+            ...practiceArea,
+            sessionCount: 0,
+            lastSessionDate: null,
+            pendingReflectionsCount: 0,
+            overdueReflectionsCount: 0,
+            oldestPendingReflectionDate: null,
+          });
         }
         setSessionIntent(session.intent);
+        
+        // Set session in store for AI hook to access (even though it's ended)
+        setCurrentSession(session);
 
         // Edit mode: Priority 1 - Check DB reflection first
         const reflection = await getReflectionBySessionId(sessionId);
@@ -385,12 +427,6 @@ const ReflectionPromptsScreen: React.FC = () => {
     return reflectionDraft[field];
   };
 
-  // Get current prompt text
-  const getCurrentPrompt = (): string => {
-    if (!reflectionDraft.coachingTone) return "";
-    const field = getCurrentField();
-    return TONE_PROMPTS[reflectionDraft.coachingTone][field];
-  };
 
   // Handle text change with character limit
   const handleTextChange = (text: string) => {
@@ -409,8 +445,8 @@ const ReflectionPromptsScreen: React.FC = () => {
     }
   };
 
-  // Handle blur - trigger debounced save
-  const handleBlur = () => {
+  // Handle blur - trigger debounced save and check for follow-up
+  const handleBlur = async () => {
     if (currentSessionId) {
       debouncedSave(currentSessionId, {
         coachingTone: reflectionDraft.coachingTone,
@@ -418,6 +454,10 @@ const ReflectionPromptsScreen: React.FC = () => {
         step3: reflectionDraft.step3,
         step4: reflectionDraft.step4,
       });
+    }
+    // Check for follow-up question if AI is active
+    if (aiActive) {
+      await checkForFollowup(getCurrentValue());
     }
   };
 
@@ -499,7 +539,21 @@ const ReflectionPromptsScreen: React.FC = () => {
 
         {/* Prompt Text */}
         <View style={styles.promptSection}>
-          <Text style={styles.promptText}>{getCurrentPrompt()}</Text>
+          {isLoadingQuestion ? (
+            <View style={styles.loadingQuestionContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.loadingQuestionText}>Preparing your question...</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.promptText}>{stepQuestion || ""}</Text>
+              {aiActive && stepQuestion && (
+                <View style={styles.aiIndicator}>
+                  <Text style={styles.aiIndicatorText}>✨ AI-tailored question</Text>
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         {/* Text Input */}
@@ -533,6 +587,26 @@ const ReflectionPromptsScreen: React.FC = () => {
               <Text style={styles.draftIndicatorText}>
                 ⚠️ Loaded from draft (app may have crashed at this step)
               </Text>
+            </View>
+          )}
+          {/* Follow-up question (when AI is active and answer is brief) */}
+          {aiActive && followup && getCurrentValue().length > 0 && getCurrentValue().length < 50 && (
+            <View style={styles.followupContainer}>
+              <Text style={styles.followupLabel}>To go deeper:</Text>
+              <Text style={styles.followupQuestion}>{followup}</Text>
+              <TextInput
+                style={styles.followupInput}
+                placeholder="Add more detail..."
+                placeholderTextColor={COLORS.text.disabled}
+                onChangeText={(text) => {
+                  if (text.length > 0) {
+                    markFollowupAnswered();
+                    const currentValue = getCurrentValue();
+                    updateReflectionDraft(getCurrentField(), `${currentValue} ${text}`);
+                  }
+                }}
+                multiline
+              />
             </View>
           )}
         </View>
@@ -668,6 +742,59 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: COLORS.text.primary,
     lineHeight: TYPOGRAPHY.fontSize.lg * TYPOGRAPHY.lineHeight.normal,
+  },
+  loadingQuestionContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  loadingQuestionText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+  },
+  aiIndicator: {
+    marginTop: SPACING.xs,
+    paddingVertical: SPACING.xs,
+  },
+  aiIndicatorText: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    color: COLORS.text.secondary,
+    fontStyle: "italic",
+  },
+  followupContainer: {
+    marginTop: SPACING.md,
+    padding: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.neutral[200],
+  },
+  followupLabel: {
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: SPACING.xs,
+  },
+  followupQuestion: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: COLORS.text.primary,
+    marginBottom: SPACING.sm,
+    lineHeight: TYPOGRAPHY.fontSize.md * TYPOGRAPHY.lineHeight.normal,
+  },
+  followupInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    padding: SPACING.sm,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.primary,
+    borderWidth: 1,
+    borderColor: COLORS.neutral[200],
+    minHeight: 60,
+    textAlignVertical: "top",
   },
   inputSection: {
     marginBottom: SPACING.md,

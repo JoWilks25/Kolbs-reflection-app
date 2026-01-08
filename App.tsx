@@ -17,6 +17,7 @@ export default function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // await dropAllTables()
         // Initialize database
         await initDatabase();
 

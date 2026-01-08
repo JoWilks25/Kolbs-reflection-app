@@ -28,9 +28,9 @@ export interface AIContext {
  */
 const TONE_SYSTEM_PROMPTS: Record<CoachingTone, string> = {
   1: `You are a facilitative coach using guided discovery. Help users explore their own beliefs and emotions through clarifying questions. Never give direct answers - guide users to their own conclusions.`,
-  
+
   2: `You are a Socratic coach using structured inquiry. Challenge assumptions, examine evidence, and explore implications. Ask probing questions that build critical thinking systematically.`,
-  
+
   3: `You are a supportive coach providing emotional scaffolding. Offer encouragement, normalize struggle, and show empathy. Help users feel capable while providing specific assistance when needed.`,
 };
 
@@ -40,11 +40,11 @@ const TONE_SYSTEM_PROMPTS: Record<CoachingTone, string> = {
  */
 const TYPE_MODIFIERS: Record<PracticeAreaType, string> = {
   solo_skill: `Focus on technical execution, precision, and measurable improvement. Reference specific techniques and physical/mental processes.`,
-  
+
   performance: `Address execution under pressure, audience awareness, and managing nerves. Consider preparation, presence, and recovery from mistakes.`,
-  
+
   interpersonal: `Explore multiple perspectives, emotional dynamics, and relationship impact. Consider how others experienced the interaction.`,
-  
+
   creative: `Encourage divergent thinking and embrace uncertainty. Explore where ideas came from and what surprised the user.`,
 };
 
@@ -55,6 +55,21 @@ const PLACEHOLDER_STEP_INSTRUCTIONS: Record<2 | 3 | 4, string> = {
   2: `Generate a brief placeholder starter (3-6 words) for describing what happened during practice. Example: "I focused on..." or "The main challenge was..."`,
   3: `Generate a brief placeholder starter (3-6 words) for identifying a lesson or pattern. Example: "I noticed that..." or "The key insight was..."`,
   4: `Generate a brief placeholder starter (3-6 words) for planning next steps. Example: "Next time I will..." or "I want to try..."`,
+};
+
+/**
+ * Step-specific guidance for question generation
+ */
+const STEP_QUESTION_GUIDANCE: Record<2 | 3 | 4, string> = {
+  2: `Generate a question asking what actually happened during their practice session.
+       The question should focus on concrete events, actions, observations, and outcomes.
+       Reference their specific intent and practice area.`,
+  3: `Generate a question asking what they learned, noticed, or discovered.
+       The question should focus on insights, patterns, realizations, or understanding.
+       Connect to what happened in their session.`,
+  4: `Generate a question asking what they will do or try next time.
+       The question should focus on specific next steps, experiments, or adjustments.
+       Build on their learning from today's session.`,
 };
 
 /**
@@ -96,7 +111,7 @@ export const buildPlaceholderPrompt = (
   const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
   const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
   const stepInstruction = PLACEHOLDER_STEP_INSTRUCTIONS[step];
-  
+
   return `${tonePrompt}
 
 ${typeModifier}
@@ -127,7 +142,7 @@ export const buildFollowupPrompt = (
   const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
   const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
   const followupExample = getFollowupExample(context.coachingTone, context.practiceAreaType);
-  
+
   return `${tonePrompt}
 
 ${typeModifier}
@@ -156,6 +171,86 @@ export const getFollowupExample = (
 };
 
 /**
+ * Build a prompt for generating context-specific step questions
+ * 
+ * @param context - AI context with practice area, intent, and tone info
+ * @param step - Kolb step (2, 3, or 4)
+ * @returns Full prompt string for the LLM
+ */
+export const buildStepQuestionPrompt = (
+  context: AIContext,
+  step: 2 | 3 | 4,
+): string => {
+  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
+  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
+  const stepGuidance = STEP_QUESTION_GUIDANCE[step];
+
+  const toneName = context.coachingTone === 1
+    ? 'Facilitative (guided discovery)'
+    : context.coachingTone === 2
+      ? 'Socratic (structured inquiry)'
+      : 'Supportive (encouraging)';
+
+  return `You are a ${toneName} coach helping someone reflect on their practice session.
+
+      Context:
+      - Practice Area: ${context.practiceAreaName} (${context.practiceAreaType})
+      - Today's Intent: ${context.sessionIntent}
+      ${context.previousStep4Answer ? `- Previous Session Goal: ${context.previousStep4Answer}` : ''}
+      ${context.currentStepAnswers?.step2 ? `- What happened: ${context.currentStepAnswers.step2.slice(0, 200)}...` : ''}
+      ${context.currentStepAnswers?.step3 ? `- What they learned: ${context.currentStepAnswers.step3.slice(0, 200)}...` : ''}
+      
+      Task: ${stepGuidance}
+      
+      Generate ONE coaching question that follows ALL these rules:
+      1. Reference "${context.practiceAreaName}" OR "${context.sessionIntent}" directly
+      2. Match ${context.practiceAreaType} practice type
+      3. Use ${toneName} coaching style
+      4. Be 10-25 words exactly
+      5. End with a question mark
+      6. Feel personalized to THIS specific session
+      
+      GOOD question examples (reference specific practice elements):
+      
+      Practice Area: "Piano - Hands Independence"
+      Intent: "Practice left-hand-only accents"
+      ✓ "How did your left hand respond when you tried to increase the tempo on those accents?"
+      ✓ "What patterns are you seeing between tempo and your left-hand precision on the accents?"
+      ✓ "What specific tempo-related change will you test in your next hands independence practice?"
+      
+      Practice Area: "Guitar - Left hand fingering"
+      Intent: "Improve speed on G to C chord transitions"
+      ✓ "What happened to your left hand fingering speed during the G to C transitions?"
+      ✓ "Which finger caused the most hesitation in your G to C chord changes?"
+      ✓ "What specific left hand adjustment will you test for smoother G to C transitions?"
+      
+      Practice Area: "Python - Async programming"
+      Intent: "Refactor callback hell to async/await"
+      ✓ "How did your Python code clarity change when converting callbacks to async/await patterns?"
+      ✓ "Which callback pattern proved hardest to refactor into async/await in Python today?"
+      ✓ "What specific async pattern will you apply to the remaining callback code?"
+      
+      Practice Area: "1-on-1 meetings - Active listening"
+      Intent: "Ask clarifying questions before offering solutions"
+      ✓ "What shifted in your 1-on-1 when you asked clarifying questions before problem-solving?"
+      ✓ "How did your team member respond when you used clarifying questions in active listening?"
+      ✓ "Which clarifying question technique will you practice in your next 1-on-1 meeting?"
+      
+      BAD question examples (too generic, don't reference practice area or intent):
+      ✗ "What happened during practice?"
+      ✗ "What did you learn?"
+      ✗ "How was your session?"
+      ✗ "What will you do next time?"
+      ✗ "Did you improve today?"
+      
+      DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
+      DO NOT ask multiple questions - generate exactly ONE question.
+      DO NOT include explanations or preamble - output ONLY the question text.
+      
+      Generate the question now:`.trim();
+};
+
+/**
  * Get the tone-adapted base prompt for each Kolb step
  * Used when AI is disabled but coaching tone is still selected
  */
@@ -180,7 +275,7 @@ export const getTonePromptForStep = (
       4: "What's one small thing you'll focus on next time?",
     },
   };
-  
+
   return prompts[tone][step];
 };
 
