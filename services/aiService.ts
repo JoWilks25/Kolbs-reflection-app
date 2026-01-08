@@ -252,7 +252,8 @@ export const analyzeIntent = async (
 
     // Parse response: expect JSON format
     // {"isSpecific": true/false, "suggestion": "...", "reasoning": "..."}
-    const parsed = JSON.parse(result.text);
+    const test = result.text.replaceAll('`', '').replace("json", "")
+    const parsed = JSON.parse(test);
     return {
       isSpecific: parsed.isSpecific === true,
       suggestion: parsed.suggestion || null,

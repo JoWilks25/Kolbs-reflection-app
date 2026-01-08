@@ -333,8 +333,10 @@ Task: Analyze whether this intent is specific enough for effective practice.
 
 ${typeGuidance[practiceAreaType]}
 
-Examples of GENERIC intents (need refinement):
-- "practice piano" → too broad, no focus
+Examples of GENERIC intents (need clarification):
+- "practice" → completely vague, no focus
+- "practice violin" → too broad, could mean anything
+- "practice piano" → no specific element identified
 - "get better at speaking" → not measurable, no specific goal
 - "work on coding" → no concrete task
 - "improve" → completely vague
@@ -346,26 +348,59 @@ Examples of SPECIFIC intents (good as-is):
 - "write 500 words using only dialogue tags"
 
 Instructions:
-1. Is the user's intent specific enough? Consider:
-   - Does it reference concrete elements of ${practiceAreaName}?
-   - Is it clear what they'll actually DO during practice?
-   - Can progress be measured or observed?
-   - Is it focused on one clear thing?
+1. First, determine if the intent is GENERIC or SPECIFIC:
+   - GENERIC intents are vague, mention only the practice area name, or lack focus
+   - SPECIFIC intents reference concrete elements and clear actions
 
-2. If NOT specific enough, generate ONE refined version that:
-   - References specific aspects of "${practiceAreaName}"
-   - Is actionable and measurable
-   ${previousStep4Answer ? `- Builds naturally on their previous goal: "${previousStep4Answer}"` : '- Provides a clear starting point'}
-   - Is 5-20 words long
-   - Maintains the spirit of their original intent
+2. If GENERIC, DO NOT generate a suggestion. Instead:
+   - Ask 2-3 clarifying questions to help the user identify what specifically they want to practice
+   - Questions should guide them toward concrete techniques, songs, skills, or focus areas
+   - Reference the practice area name in your questions
+   - Keep questions conversational and helpful
 
-3. Provide brief reasoning (15 words max) explaining what makes it generic or why it's already good.
+3. If SPECIFIC, provide brief positive feedback (10-15 words) confirming why it works well.
 
 Respond ONLY with valid JSON in this exact format:
 {
   "isSpecific": true or false,
-  "suggestion": "refined intent text" or null (null if already specific),
-  "reasoning": "brief explanation"
+  "clarifyingQuestions": ["question 1", "question 2"] or null (null if already specific),
+  "suggestion": null (deprecated - do not use),
+  "feedback": "brief explanation or encouragement"
+}
+
+Examples:
+
+Input: "practice violin"
+Output:
+{
+  "isSpecific": false,
+  "clarifyingQuestions": [
+    "Is there a specific piece or song you want to work on?",
+    "Are you focusing on a particular technique (e.g., bowing, vibrato, scales)?"
+  ],
+  "suggestion": null,
+  "feedback": "Too broad - needs specific focus within violin practice"
+}
+
+Input: "practice"
+Output:
+{
+  "isSpecific": false,
+  "clarifyingQuestions": [
+    "What aspect of ${practiceAreaName} do you want to focus on today?",
+    "Is there a specific technique, section, or skill you want to improve?"
+  ],
+  "suggestion": null,
+  "feedback": "Very vague - needs clear direction for the session"
+}
+
+Input: "increase tempo to 120 BPM on scales"
+Output:
+{
+  "isSpecific": true,
+  "clarifyingQuestions": null,
+  "suggestion": null,
+  "feedback": "Clear and measurable - references specific technique and target tempo"
 }
 `.trim();
 };
