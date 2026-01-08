@@ -57,13 +57,16 @@ export interface PracticeAreaWithStats extends PracticeArea {
 
 /**
  * Session - A single practice session within a Practice Area
- * Unchanged from v1
+ * UPDATED in v2.2: Added intent refinement tracking fields
  */
 export interface Session {
   id: string;
   practice_area_id: string;
   previous_session_id: string | null;  // NULL for first session in Practice Area
   intent: string;
+  intent_refined?: number;  // NEW in v2.2: 0 = not refined, 1 = user accepted AI refinement
+  original_intent?: string | null;  // NEW in v2.2: Original intent if refined, null otherwise
+  intent_analysis_requested?: number;  // NEW in v2.2: 0 = not requested, 1 = user clicked "Improve Intent"
   target_duration_seconds: number | null;  // NULL = no target, just stopwatch
   started_at: number;  // Unix timestamp in milliseconds
   ended_at: number | null;  // NULL if session still active

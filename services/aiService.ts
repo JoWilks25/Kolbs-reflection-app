@@ -12,8 +12,8 @@
 import { apple } from '@react-native-ai/apple';
 import { generateText } from 'ai';
 import { Platform } from 'react-native';
-import { buildPlaceholderPrompt, buildFollowupPrompt, buildStepQuestionPrompt, getTonePromptForStep, type AIContext } from './promptService';
-import type { CoachingTone } from '../utils/types';
+import { buildPlaceholderPrompt, buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, getTonePromptForStep, type AIContext } from './promptService';
+import type { CoachingTone, PracticeAreaType } from '../utils/types';
 
 // Re-export AIContext for consumers
 export type { AIContext } from './promptService';
@@ -197,5 +197,74 @@ export const generateFollowup = async (
   } catch (error) {
     console.error('Follow-up generation failed:', error);
     return null;
+  }
+};
+
+/**
+ * Analyze user intent and provide refinement suggestion if too generic
+ * Called when user explicitly clicks "Improve Intent" button
+ * 
+ * @param userIntent - The user's current intent text
+ * @param practiceAreaName - Name of the practice area
+ * @param practiceAreaType - Type of practice area
+ * @param previousStep4Answer - Previous session's step 4 answer (next action), or null
+ * @returns Analysis result with specificity flag, suggestion, and reasoning
+ */
+export const analyzeIntent = async (
+  userIntent: string,
+  practiceAreaName: string,
+  practiceAreaType: PracticeAreaType,
+  previousStep4Answer: string | null
+): Promise<{
+  isSpecific: boolean;
+  suggestion: string | null;
+  reasoning: string | null;
+}> => {
+  // Validate minimum length
+  if (userIntent.trim().length < 5) {
+    return {
+      isSpecific: false,
+      suggestion: null,
+      reasoning: "Intent too short - add more detail"
+    };
+  }
+
+  const prompt = buildIntentAnalysisPrompt(
+    userIntent,
+    practiceAreaName,
+    practiceAreaType,
+    previousStep4Answer
+  );
+
+  try {
+    const startTime = Date.now();
+    const result = await generateText({
+      model: apple() as any, // Type assertion to work around dependency version mismatch
+      prompt,
+      maxOutputTokens: 150, // Slightly more for reasoning
+      temperature: 0.6,
+    });
+
+    const latency = Date.now() - startTime;
+    if (latency > LATENCY_WARNING_THRESHOLD) {
+      console.warn(`Intent analysis latency exceeded target: ${latency}ms`);
+    }
+
+    // Parse response: expect JSON format
+    // {"isSpecific": true/false, "suggestion": "...", "reasoning": "..."}
+    const parsed = JSON.parse(result.text);
+    return {
+      isSpecific: parsed.isSpecific === true,
+      suggestion: parsed.suggestion || null,
+      reasoning: parsed.reasoning || null,
+    };
+  } catch (error) {
+    console.error('Intent analysis failed:', error);
+    // Return error state
+    return {
+      isSpecific: false,
+      suggestion: null,
+      reasoning: "Analysis unavailable - please try again"
+    };
   }
 };

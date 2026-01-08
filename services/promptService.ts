@@ -279,3 +279,94 @@ export const getTonePromptForStep = (
   return prompts[tone][step];
 };
 
+/**
+ * Build prompt for analyzing and refining session intents
+ * Called when user explicitly clicks "Improve Intent" button
+ * 
+ * @param userIntent - The user's current intent text
+ * @param practiceAreaName - Name of the practice area
+ * @param practiceAreaType - Type of practice area (solo_skill, performance, interpersonal, creative)
+ * @param previousStep4Answer - Previous session's step 4 answer (next action), or null
+ * @returns Full prompt string for the LLM
+ */
+export const buildIntentAnalysisPrompt = (
+  userIntent: string,
+  practiceAreaName: string,
+  practiceAreaType: PracticeAreaType,
+  previousStep4Answer: string | null
+): string => {
+  const typeGuidance = {
+    solo_skill: `For solo skill practice, specific intents should reference:
+- Concrete techniques or movements
+- Measurable targets (tempo, accuracy, duration)
+- Specific exercises or sections
+- Technical elements to focus on`,
+
+    performance: `For performance practice, specific intents should reference:
+- Specific scenarios or contexts (presentation section, game situation)
+- Audience or pressure elements
+- Particular anxieties or challenges to address
+- Preparation strategies to test`,
+
+    interpersonal: `For interpersonal practice, specific intents should reference:
+- Specific people or relationship types
+- Particular communication challenges or goals
+- Specific behaviors or approaches to try
+- Concrete situations or conversations`,
+
+    creative: `For creative practice, specific intents should reference:
+- Specific creative constraints or prompts
+- Particular techniques or styles to explore
+- Concrete experiments or variations to try
+- Specific materials or tools to work with`
+  };
+
+  return `
+You are helping a user set a specific, actionable intent for a practice session.
+
+Practice Area: ${practiceAreaName} (${practiceAreaType})
+${previousStep4Answer ? `Previous session goal: "${previousStep4Answer}"` : 'First session in this Practice Area'}
+
+User's intent: "${userIntent}"
+
+Task: Analyze whether this intent is specific enough for effective practice.
+
+${typeGuidance[practiceAreaType]}
+
+Examples of GENERIC intents (need refinement):
+- "practice piano" → too broad, no focus
+- "get better at speaking" → not measurable, no specific goal
+- "work on coding" → no concrete task
+- "improve" → completely vague
+
+Examples of SPECIFIC intents (good as-is):
+- "increase tempo to 120 BPM on left-hand accents in F major"
+- "practice managing Q&A nervousness with pausing technique"
+- "implement error handling for the session list component"
+- "write 500 words using only dialogue tags"
+
+Instructions:
+1. Is the user's intent specific enough? Consider:
+   - Does it reference concrete elements of ${practiceAreaName}?
+   - Is it clear what they'll actually DO during practice?
+   - Can progress be measured or observed?
+   - Is it focused on one clear thing?
+
+2. If NOT specific enough, generate ONE refined version that:
+   - References specific aspects of "${practiceAreaName}"
+   - Is actionable and measurable
+   ${previousStep4Answer ? `- Builds naturally on their previous goal: "${previousStep4Answer}"` : '- Provides a clear starting point'}
+   - Is 5-20 words long
+   - Maintains the spirit of their original intent
+
+3. Provide brief reasoning (15 words max) explaining what makes it generic or why it's already good.
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "isSpecific": true or false,
+  "suggestion": "refined intent text" or null (null if already specific),
+  "reasoning": "brief explanation"
+}
+`.trim();
+};
+

@@ -106,6 +106,24 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
       `);
       console.log('Migration v2.1 completed: step question columns added');
     }
+
+    // Migration v2.2: Add intent refinement tracking columns to sessions
+    const sessionColumns = await db.getAllAsync<{ name: string }>(
+      "PRAGMA table_info(sessions)"
+    );
+    const sessionColumnNames = sessionColumns.map(col => col.name);
+
+    if (!sessionColumnNames.includes('intent_refined')) {
+      console.log('Running migration v2.2: Adding intent refinement columns...');
+      await db.execAsync(`
+        ALTER TABLE sessions ADD COLUMN intent_refined INTEGER DEFAULT 0;
+        ALTER TABLE sessions ADD COLUMN original_intent TEXT;
+        ALTER TABLE sessions ADD COLUMN intent_analysis_requested INTEGER DEFAULT 0;
+        UPDATE sessions SET intent_refined = 0 WHERE intent_refined IS NULL;
+        UPDATE sessions SET intent_analysis_requested = 0 WHERE intent_analysis_requested IS NULL;
+      `);
+      console.log('Migration v2.2 completed: intent refinement columns added');
+    }
   } catch (error) {
     console.error('Error running migrations:', error);
     // Don't throw - allow app to continue even if migration fails

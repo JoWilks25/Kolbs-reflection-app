@@ -380,13 +380,16 @@ export async function createSession(session: Omit<Session, 'is_deleted'>): Promi
   const db = getDatabase();
 
   await db.runAsync(
-    `INSERT INTO sessions (id, practice_area_id, previous_session_id, intent, target_duration_seconds, started_at, ended_at, is_deleted)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+    `INSERT INTO sessions (id, practice_area_id, previous_session_id, intent, intent_refined, original_intent, intent_analysis_requested, target_duration_seconds, started_at, ended_at, is_deleted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     [
       session.id,
       session.practice_area_id,
       session.previous_session_id,
       session.intent,
+      session.intent_refined ?? 0,
+      session.original_intent ?? null,
+      session.intent_analysis_requested ?? 0,
       session.target_duration_seconds,
       session.started_at,
       session.ended_at,

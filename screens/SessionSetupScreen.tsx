@@ -16,6 +16,8 @@ import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS } from "../utils/c
 import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, createSession, getBlockingUnreflectedSession } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
 import { generateId } from "../utils/uuid";
+import { analyzeIntent } from "../services/aiService";
+import type { PracticeAreaType } from "../utils/types";
 
 type SessionSetupScreenRouteProp = RouteProp<RootStackParamList, "SessionSetup">;
 type SessionSetupScreenNavigationProp = StackNavigationProp<RootStackParamList, "SessionSetup">;
@@ -27,25 +29,37 @@ type Props = {
 const SessionSetupScreen: React.FC<Props> = ({ route }) => {
   const { practiceAreaId } = route.params;
   const navigation = useNavigation<SessionSetupScreenNavigationProp>();
-  const { startSession } = useAppStore();
+  const { startSession, aiAvailable } = useAppStore();
 
   const [previousIntent, setPreviousIntent] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [practiceAreaName, setPracticeAreaName] = useState<string>("");
+  const [practiceAreaType, setPracticeAreaType] = useState<PracticeAreaType>("solo_skill");
+  const [previousStep4Answer, setPreviousStep4Answer] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // New session input state
   const [intentText, setIntentText] = useState("");
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
 
+  // Intent analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<{
+    isSpecific: boolean;
+    suggestion: string | null;
+    reasoning: string | null;
+  } | null>(null);
+  const [originalIntentBeforeRefinement, setOriginalIntentBeforeRefinement] = useState<string | null>(null);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        // Load Practice Area name
+        // Load Practice Area name and type
         const practiceArea = await getPracticeAreaById(practiceAreaId);
         if (practiceArea) {
           setPracticeAreaName(practiceArea.name);
+          setPracticeAreaType(practiceArea.type);
           // Update header title
           navigation.setOptions({ title: practiceArea.name });
         }
@@ -54,14 +68,18 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
         const result = await getPreviousSessionIntent(practiceAreaId) as any;
         if (!result) {
           setPreviousIntent("No previous sessions");
+          setPreviousStep4Answer(null);
         } else if (!result.previous_next_action) {
           setPreviousIntent("No previous intent recorded");
+          setPreviousStep4Answer(null);
         } else {
           setPreviousIntent(result.previous_next_action);
+          setPreviousStep4Answer(result.previous_next_action);
         }
       } catch (error) {
         console.error("Error loading session setup data:", error);
         setPreviousIntent("Error loading previous intent");
+        setPreviousStep4Answer(null);
       } finally {
         setIsLoading(false);
       }
@@ -102,6 +120,53 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     previousIntent !== "No previous intent recorded" &&
     previousIntent !== "Error loading previous intent";
 
+  // Handle manual analysis trigger
+  const handleImproveIntent = async () => {
+    if (!aiAvailable || intentText.trim().length < 5) {
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysis(null); // Clear previous analysis
+
+    try {
+      const result = await analyzeIntent(
+        intentText,
+        practiceAreaName,
+        practiceAreaType,
+        previousStep4Answer
+      );
+
+      setAnalysis(result);
+    } catch (error) {
+      console.error("Error analyzing intent:", error);
+      setAnalysis({
+        isSpecific: false,
+        suggestion: null,
+        reasoning: "Analysis unavailable - please try again",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Accept AI suggestion
+  const handleAcceptSuggestion = () => {
+    if (analysis?.suggestion) {
+      // Store original intent if this is the first refinement
+      if (!originalIntentBeforeRefinement) {
+        setOriginalIntentBeforeRefinement(intentText);
+      }
+      setIntentText(analysis.suggestion);
+      setAnalysis(null); // Clear analysis after accepting
+    }
+  };
+
+  // Dismiss suggestion
+  const handleDismissSuggestion = () => {
+    setAnalysis(null);
+  };
+
   const handleStartSession = async () => {
     try {
       // Defensive re-check to prevent race conditions
@@ -117,12 +182,19 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
       // Get last session ID for sequential linking
       const lastSessionId = await getLastSessionId(practiceAreaId);
 
+      // Track if intent was refined for analytics
+      const intentRefined = analysis?.suggestion === intentText.trim() && originalIntentBeforeRefinement !== null;
+      const intentAnalysisRequested = analysis !== null || isAnalyzing;
+
       // Create new session object
       const newSession = {
         id: generateId(),
         practice_area_id: practiceAreaId,
         previous_session_id: lastSessionId, // NULL for first session
         intent: intentText.trim(),
+        intent_refined: intentRefined ? 1 : 0,
+        original_intent: intentRefined ? originalIntentBeforeRefinement : null,
+        intent_analysis_requested: intentAnalysisRequested ? 1 : 0,
         target_duration_seconds: selectedDuration,
         started_at: Date.now(),
         ended_at: null,
@@ -187,10 +259,113 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
               placeholder="Enter your intent..."
               placeholderTextColor={COLORS.text.disabled}
               value={intentText}
-              onChangeText={setIntentText}
+              onChangeText={(text) => {
+                setIntentText(text);
+                // Clear analysis when user edits
+                if (analysis) setAnalysis(null);
+              }}
               textAlignVertical="top"
             />
+
+            {/* Improve Intent button - only show if AI available */}
+            {aiAvailable && (
+              <TouchableOpacity
+                style={[
+                  styles.improveButton,
+                  (intentText.trim().length < 5 || isAnalyzing) && styles.improveButtonDisabled
+                ]}
+                onPress={handleImproveIntent}
+                disabled={intentText.trim().length < 5 || isAnalyzing}
+                activeOpacity={0.7}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={styles.improveButtonText}>Analyzing...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.improveButtonIcon}>✨</Text>
+                    <Text style={styles.improveButtonText}>Improve Intent</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* Help text */}
+            {aiAvailable && !analysis && !isAnalyzing && (
+              <Text style={styles.helpText}>
+                Optional: Get AI help to make your intent more specific
+              </Text>
+            )}
           </View>
+
+          {/* Analysis Results */}
+          {analysis && (
+            <View style={styles.analysisContainer}>
+              {analysis.isSpecific ? (
+                // Positive feedback - intent is already good
+                <View style={styles.positiveContainer}>
+                  <Text style={styles.positiveIcon}>✓</Text>
+                  <View style={styles.positiveContent}>
+                    <Text style={styles.positiveTitle}>Your intent is clear and specific!</Text>
+                    {analysis.reasoning && (
+                      <Text style={styles.positiveReasoning}>{analysis.reasoning}</Text>
+                    )}
+                  </View>
+                </View>
+              ) : (
+                // Suggestion - intent needs improvement
+                <View style={styles.suggestionContainer}>
+                  <View style={styles.suggestionHeader}>
+                    <Text style={styles.suggestionIcon}>💡</Text>
+                    <Text style={styles.suggestionTitle}>More specific version</Text>
+                  </View>
+
+                  {analysis.suggestion ? (
+                    <>
+                      <Text style={styles.suggestionText}>"{analysis.suggestion}"</Text>
+
+                      {analysis.reasoning && (
+                        <Text style={styles.suggestionReasoning}>
+                          Why: {analysis.reasoning}
+                        </Text>
+                      )}
+
+                      <View style={styles.suggestionButtons}>
+                        <TouchableOpacity
+                          style={styles.suggestionButtonPrimary}
+                          onPress={handleAcceptSuggestion}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.suggestionButtonPrimaryText}>Use This</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.suggestionButtonSecondary}
+                          onPress={handleDismissSuggestion}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.suggestionButtonSecondaryText}>Keep Mine</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.suggestionButtonSecondary}
+                          onPress={handleImproveIntent}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.suggestionButtonSecondaryText}>Improve Again</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    // Error state
+                    <Text style={styles.errorText}>{analysis.reasoning}</Text>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Target Duration Section */}
           <View style={styles.durationSection}>
@@ -396,6 +571,134 @@ const styles = StyleSheet.create({
   },
   startButtonTextDisabled: {
     color: COLORS.text.disabled,
+  },
+  improveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F0F7FF",
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  improveButtonDisabled: {
+    opacity: 0.5,
+  },
+  improveButtonIcon: {
+    fontSize: 16,
+  },
+  improveButtonText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  analysisContainer: {
+    marginBottom: SPACING.md,
+  },
+  // Positive feedback styles
+  positiveContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#F1F8F4",
+    borderRadius: 8,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.success,
+    gap: SPACING.sm,
+  },
+  positiveIcon: {
+    fontSize: 24,
+    color: COLORS.success,
+  },
+  positiveContent: {
+    flex: 1,
+  },
+  positiveTitle: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: "#2E7D32",
+    marginBottom: SPACING.xs,
+  },
+  positiveReasoning: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.primary,
+    lineHeight: TYPOGRAPHY.fontSize.sm * TYPOGRAPHY.lineHeight.normal,
+  },
+  // Suggestion styles
+  suggestionContainer: {
+    backgroundColor: "#FFF9E6",
+    borderRadius: 8,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: "#FFE082",
+  },
+  suggestionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  suggestionIcon: {
+    fontSize: 20,
+  },
+  suggestionTitle: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+  },
+  suggestionText: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.primary,
+    lineHeight: TYPOGRAPHY.fontSize.md * TYPOGRAPHY.lineHeight.normal,
+    marginBottom: SPACING.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+  },
+  suggestionReasoning: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    fontStyle: "italic",
+    marginBottom: SPACING.md,
+  },
+  suggestionButtons: {
+    flexDirection: "row",
+    gap: SPACING.xs,
+  },
+  suggestionButtonPrimary: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  suggestionButtonPrimaryText: {
+    color: COLORS.text.inverse,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+  },
+  suggestionButtonSecondary: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 6,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.neutral[200],
+  },
+  suggestionButtonSecondaryText: {
+    color: COLORS.text.primary,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+  },
+  errorText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.error,
+    fontStyle: "italic",
   },
 });
 
