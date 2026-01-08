@@ -46,10 +46,9 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<{
     isSpecific: boolean;
-    suggestion: string | null;
-    reasoning: string | null;
+    clarifyingQuestions: string[] | null;
+    feedback: string | null;
   } | null>(null);
-  const [originalIntentBeforeRefinement, setOriginalIntentBeforeRefinement] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -142,27 +141,15 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
       console.error("Error analyzing intent:", error);
       setAnalysis({
         isSpecific: false,
-        suggestion: null,
-        reasoning: "Analysis unavailable - please try again",
+        clarifyingQuestions: null,
+        feedback: "Analysis unavailable - please try again",
       });
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // Accept AI suggestion
-  const handleAcceptSuggestion = () => {
-    if (analysis?.suggestion) {
-      // Store original intent if this is the first refinement
-      if (!originalIntentBeforeRefinement) {
-        setOriginalIntentBeforeRefinement(intentText);
-      }
-      setIntentText(analysis.suggestion);
-      setAnalysis(null); // Clear analysis after accepting
-    }
-  };
-
-  // Dismiss suggestion
+  // Dismiss analysis
   const handleDismissSuggestion = () => {
     setAnalysis(null);
   };
@@ -182,8 +169,8 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
       // Get last session ID for sequential linking
       const lastSessionId = await getLastSessionId(practiceAreaId);
 
-      // Track if intent was refined for analytics
-      const intentRefined = analysis?.suggestion === intentText.trim() && originalIntentBeforeRefinement !== null;
+      // Track if intent analysis was requested (clarifying questions don't provide direct suggestions)
+      const intentRefined = 0; // No longer tracking refinement since we use clarifying questions
       const intentAnalysisRequested = analysis !== null || isAnalyzing;
 
       // Create new session object
@@ -309,38 +296,37 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
                   <Text style={styles.positiveIcon}>✓</Text>
                   <View style={styles.positiveContent}>
                     <Text style={styles.positiveTitle}>Your intent is clear and specific!</Text>
-                    {analysis.reasoning && (
-                      <Text style={styles.positiveReasoning}>{analysis.reasoning}</Text>
+                    {analysis.feedback && (
+                      <Text style={styles.positiveReasoning}>{analysis.feedback}</Text>
                     )}
                   </View>
                 </View>
               ) : (
-                // Suggestion - intent needs improvement
+                // Clarifying questions - intent needs improvement
                 <View style={styles.suggestionContainer}>
                   <View style={styles.suggestionHeader}>
                     <Text style={styles.suggestionIcon}>💡</Text>
-                    <Text style={styles.suggestionTitle}>More specific version</Text>
+                    <Text style={styles.suggestionTitle}>Help refine your intent</Text>
                   </View>
 
-                  {analysis.suggestion ? (
+                  {analysis.clarifyingQuestions && analysis.clarifyingQuestions.length > 0 ? (
                     <>
-                      <Text style={styles.suggestionText}>"{analysis.suggestion}"</Text>
-
-                      {analysis.reasoning && (
+                      {analysis.feedback && (
                         <Text style={styles.suggestionReasoning}>
-                          Why: {analysis.reasoning}
+                          {analysis.feedback}
                         </Text>
                       )}
 
-                      <View style={styles.suggestionButtons}>
-                        <TouchableOpacity
-                          style={styles.suggestionButtonPrimary}
-                          onPress={handleAcceptSuggestion}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.suggestionButtonPrimaryText}>Use This</Text>
-                        </TouchableOpacity>
+                      <View style={styles.questionsList}>
+                        {analysis.clarifyingQuestions.map((question, index) => (
+                          <View key={index} style={styles.questionItem}>
+                            <Text style={styles.questionBullet}>•</Text>
+                            <Text style={styles.questionText}>{question}</Text>
+                          </View>
+                        ))}
+                      </View>
 
+                      <View style={styles.suggestionButtons}>
                         <TouchableOpacity
                           style={styles.suggestionButtonSecondary}
                           onPress={handleDismissSuggestion}
@@ -360,7 +346,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
                     </>
                   ) : (
                     // Error state
-                    <Text style={styles.errorText}>{analysis.reasoning}</Text>
+                    <Text style={styles.errorText}>{analysis.feedback}</Text>
                   )}
                 </View>
               )}
@@ -662,6 +648,26 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     fontStyle: "italic",
     marginBottom: SPACING.md,
+  },
+  questionsList: {
+    marginBottom: SPACING.md,
+  },
+  questionItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: SPACING.sm,
+  },
+  questionBullet: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.primary,
+    marginRight: SPACING.xs,
+    marginTop: 2,
+  },
+  questionText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.primary,
+    lineHeight: TYPOGRAPHY.fontSize.sm * TYPOGRAPHY.lineHeight.normal,
   },
   suggestionButtons: {
     flexDirection: "row",

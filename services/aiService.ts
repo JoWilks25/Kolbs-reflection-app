@@ -217,15 +217,15 @@ export const analyzeIntent = async (
   previousStep4Answer: string | null
 ): Promise<{
   isSpecific: boolean;
-  suggestion: string | null;
-  reasoning: string | null;
+  clarifyingQuestions: string[] | null;
+  feedback: string | null;
 }> => {
   // Validate minimum length
   if (userIntent.trim().length < 5) {
     return {
       isSpecific: false,
-      suggestion: null,
-      reasoning: "Intent too short - add more detail"
+      clarifyingQuestions: null,
+      feedback: "Intent too short - add more detail"
     };
   }
 
@@ -251,21 +251,21 @@ export const analyzeIntent = async (
     }
 
     // Parse response: expect JSON format
-    // {"isSpecific": true/false, "suggestion": "...", "reasoning": "..."}
+    // {"isSpecific": true/false, "clarifyingQuestions": [...], "feedback": "..."}
     const test = result.text.replaceAll('`', '').replace("json", "")
     const parsed = JSON.parse(test);
     return {
       isSpecific: parsed.isSpecific === true,
-      suggestion: parsed.suggestion || null,
-      reasoning: parsed.reasoning || null,
+      clarifyingQuestions: parsed.clarifyingQuestions || null,
+      feedback: parsed.feedback || null,
     };
   } catch (error) {
     console.error('Intent analysis failed:', error);
     // Return error state
     return {
       isSpecific: false,
-      suggestion: null,
-      reasoning: "Analysis unavailable - please try again"
+      clarifyingQuestions: null,
+      feedback: "Analysis unavailable - please try again"
     };
   }
 };
