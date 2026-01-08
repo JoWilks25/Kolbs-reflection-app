@@ -54,45 +54,73 @@ export async function exportData(): Promise<void> {
 
         // Build reflection object if it exists
         let reflection: ExportReflection | null = null;
-        if (session.format !== null && session.format !== undefined) {
+        if (session.coaching_tone !== null && session.coaching_tone !== undefined) {
           // Compute isedited
           const isedited =
             session.updated_at !== null &&
             session.completed_at !== null &&
             session.updated_at !== session.completed_at;
 
+          // Map coaching tone number to name
+          const coachingToneNames: Record<number, string> = {
+            1: 'Facilitative',
+            2: 'Socratic',
+            3: 'Supportive',
+          };
+
           reflection = {
-            format: session.format,
-            step2answer: session.step2_answer,
-            step3answer: session.step3_answer,
-            step4answer: session.step4_answer,
-            feedbackrating: session.feedback_rating,
-            feedbacknote: session.feedback_note,
-            completedat: session.completed_at,
-            updatedat: session.updated_at,
-            isedited,
+            coaching_tone: session.coaching_tone,
+            coaching_tone_name: coachingToneNames[session.coaching_tone] || 'Unknown',
+            ai_assisted: session.ai_assisted === 1,
+            ai_placeholders_shown: session.ai_placeholders_shown || 0,
+            ai_questions_shown: session.ai_questions_shown || 0,
+            ai_followups_shown: session.ai_followups_shown || 0,
+            ai_followups_answered: session.ai_followups_answered || 0,
+            step2_question: session.step2_question || null,
+            step3_question: session.step3_question || null,
+            step4_question: session.step4_question || null,
+            what_happened: session.step2_answer,
+            lessons_learned: session.step3_answer,
+            next_actions: session.step4_answer,
+            feedback_rating: session.feedback_rating,
+            feedback_rating_label: session.feedback_rating !== null
+              ? ['Confusing', 'Hard', 'Neutral', 'Good', 'Great'][session.feedback_rating] || null
+              : null,
+            feedback_note: session.feedback_note,
+            completed_at: session.completed_at,
+            updated_at: session.updated_at,
+            is_edited: isedited,
           };
         }
 
         // Build session object with proper field names
         return {
           id: session.id,
-          previoussessionid: session.previous_session_id,
+          previous_session_id: session.previous_session_id,
           intent: session.intent,
-          startedat: session.started_at,
-          endedat: session.ended_at,
-          targetdurationseconds: session.target_duration_seconds,
-          actualdurationseconds,
-          mettarget,
+          started_at: session.started_at,
+          ended_at: session.ended_at,
+          target_duration_seconds: session.target_duration_seconds,
+          actual_duration_seconds: actualdurationseconds,
+          met_target: mettarget,
           reflection,
         };
       });
 
       // Build practice area object with proper field names
+      const typeLabels: Record<string, string> = {
+        solo_skill: 'Solo Skill',
+        performance: 'Performance',
+        interpersonal: 'Interpersonal',
+        creative: 'Creative',
+      };
+
       return {
         id: pa.id,
         name: pa.name,
-        createdat: pa.created_at,
+        type: pa.type,
+        type_label: typeLabels[pa.type] || pa.type,
+        created_at: pa.created_at,
         sessions,
       };
     });

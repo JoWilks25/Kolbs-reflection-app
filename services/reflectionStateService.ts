@@ -10,7 +10,7 @@ import { Session, Reflection } from '../utils/types';
 /**
  * Reflection state with status-specific metadata
  */
-export type ReflectionState = 
+export type ReflectionState =
   | { status: 'completed'; canEdit: boolean; isEdited: boolean }
   | { status: 'pending'; hoursRemaining: number }
   | { status: 'overdue'; hoursUntilExpiry: number }
@@ -33,7 +33,7 @@ export interface ReflectionBadge {
  * @returns ReflectionState with status-specific metadata
  */
 export const getReflectionState = (
-  session: Session, 
+  session: Session,
   reflection?: Reflection | null
 ): ReflectionState => {
   // If reflection exists, it's completed
@@ -41,10 +41,10 @@ export const getReflectionState = (
     const hoursSinceEnd = (Date.now() - (session.ended_at || 0)) / (1000 * 60 * 60);
     const canEdit = hoursSinceEnd <= 48;
     const isEdited = Boolean(reflection.updated_at && reflection.updated_at > reflection.completed_at);
-    
+
     return { status: 'completed', canEdit, isEdited };
   }
-  
+
   // No reflection - calculate deadline state
   if (!session.ended_at) {
     // Session hasn't ended yet - no reflection state
@@ -52,15 +52,15 @@ export const getReflectionState = (
   }
 
   const hoursSinceEnd = (Date.now() - session.ended_at) / (1000 * 60 * 60);
-  
+
   if (hoursSinceEnd <= 24) {
     return { status: 'pending', hoursRemaining: Math.ceil(24 - hoursSinceEnd) };
   }
-  
+
   if (hoursSinceEnd <= 48) {
     return { status: 'overdue', hoursUntilExpiry: Math.ceil(48 - hoursSinceEnd) };
   }
-  
+
   return { status: 'expired', canStillReflect: true };
 };
 
@@ -73,28 +73,28 @@ export const getReflectionState = (
 export const getReflectionBadge = (state: ReflectionState): ReflectionBadge => {
   switch (state.status) {
     case 'completed':
-      return { 
-        emoji: '✅', 
+      return {
+        emoji: '✅',
         label: state.isEdited ? 'Completed (Edited)' : 'Completed',
-        color: '#4CAF50' 
+        color: '#4CAF50'
       };
     case 'pending':
-      return { 
-        emoji: '🟡', 
+      return {
+        emoji: '🟡',
         label: `Due in ${state.hoursRemaining}h`,
-        color: '#FFC107' 
+        color: '#FFC107'
       };
     case 'overdue':
-      return { 
-        emoji: '🟠', 
+      return {
+        emoji: '🟠',
         label: `Overdue (${state.hoursUntilExpiry}h left)`,
-        color: '#FF9800' 
+        color: '#FF9800'
       };
     case 'expired':
-      return { 
-        emoji: '🔴', 
+      return {
+        emoji: '🔴',
         label: 'Expired',
-        color: '#F44336' 
+        color: '#F44336'
       };
   }
 };

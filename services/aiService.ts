@@ -12,7 +12,8 @@
 import { apple } from '@react-native-ai/apple';
 import { generateText } from 'ai';
 import { Platform } from 'react-native';
-import { buildPlaceholderPrompt, buildFollowupPrompt, type AIContext } from './promptService';
+import { buildPlaceholderPrompt, buildFollowupPrompt, buildStepQuestionPrompt, getTonePromptForStep, type AIContext } from './promptService';
+import type { CoachingTone } from '../utils/types';
 
 // Re-export AIContext for consumers
 export type { AIContext } from './promptService';
@@ -36,6 +37,12 @@ export const checkAIAvailability = async (): Promise<boolean> => {
     return false;
   }
 
+  const aiEnabled = await apple.isAvailable();
+  if (!aiEnabled) {
+    console.log('AI unavailable apple.isAvailable() false');
+    return false;
+  }
+
   // Check iOS version (must be >= 26)
   const iosVersion = parseInt(Platform.Version as string, 10);
   if (iosVersion < 26) {
@@ -55,6 +62,9 @@ export const checkAIAvailability = async (): Promise<boolean> => {
  * 
  * Creates a brief (3-6 word) contextual starter phrase to help users
  * begin their reflection. Example: "I focused on..." or "The main challenge was..."
+ * 
+ * @deprecated This function is kept for backward compatibility but is no longer used.
+ * Use generateStepQuestion() instead for AI-generated questions.
  * 
  * @param context - AI context with practice area, intent, and tone
  * @param step - Kolb step (2, 3, or 4)
@@ -86,6 +96,63 @@ export const generatePlaceholder = async (
     console.error('Placeholder generation failed:', error);
     return null;
   }
+};
+
+/**
+ * Generate a context-specific question for a Kolb reflection step
+ * This replaces the static prompts with AI-generated, personalized questions
+ * 
+ * @param context - AI context with practice area, intent, and tone
+ * @param step - Kolb step (2, 3, or 4)
+ * @returns Generated question text, or null if generation fails
+ */
+export const generateStepQuestion = async (
+  context: AIContext,
+  step: 2 | 3 | 4,
+): Promise<string | null> => {
+  const prompt = buildStepQuestionPrompt(context, step);
+
+  try {
+    const startTime = Date.now();
+    const result = await generateText({
+      model: apple() as any, // Type assertion to work around dependency version mismatch
+      prompt,
+      maxOutputTokens: 80, // Longer than placeholder (was 50) for full questions
+      temperature: 0.7, // Balanced creativity
+    });
+
+    const latency = Date.now() - startTime;
+    if (latency > LATENCY_WARNING_THRESHOLD) {
+      console.warn(`AI question generation latency exceeded target: ${latency}ms`);
+    }
+
+    const question = result.text?.trim();
+
+    // Validation: ensure it's actually a question
+    if (!question || !question.endsWith('?')) {
+      console.warn('Generated text is not a question, using fallback');
+      return null;
+    }
+
+    return question;
+  } catch (error) {
+    console.error('Step question generation failed:', error);
+    return null; // Will fallback to static prompt
+  }
+};
+
+/**
+ * Get static fallback prompt when AI is unavailable or fails
+ * 
+ * @param tone - Coaching tone (1=Facilitative, 2=Socratic, 3=Supportive)
+ * @param step - Kolb step (2, 3, or 4)
+ * @returns Static prompt string for the given tone and step
+ */
+export const getStaticPromptForTone = (
+  tone: CoachingTone,
+  step: 2 | 3 | 4,
+): string => {
+  return getTonePromptForStep(tone, step);
 };
 
 /**

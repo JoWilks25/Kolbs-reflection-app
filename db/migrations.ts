@@ -39,6 +39,9 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
       console.log('Database schema initialized successfully');
     } else {
       console.log('Database tables already exist, skipping schema creation');
+
+      // Run migrations for existing databases
+      await runMigrations(db);
     }
 
     return db;
@@ -69,6 +72,43 @@ export async function closeDatabase(): Promise<void> {
   if (db) {
     await db.closeAsync();
     db = null;
+  }
+}
+
+/**
+ * Run migrations for existing databases
+ * Adds new columns if they don't exist
+ */
+async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
+  try {
+    // Check if ai_questions_shown column exists
+    const columns = await db.getAllAsync<{ name: string }>(
+      "PRAGMA table_info(reflections)"
+    );
+    const columnNames = columns.map(col => col.name);
+
+    // Migration v2.1: Add ai_questions_shown and step question columns
+    if (!columnNames.includes('ai_questions_shown')) {
+      console.log('Running migration v2.1: Adding ai_questions_shown column...');
+      await db.execAsync(`
+        ALTER TABLE reflections ADD COLUMN ai_questions_shown INTEGER DEFAULT 0;
+        UPDATE reflections SET ai_questions_shown = 0 WHERE ai_questions_shown IS NULL;
+      `);
+      console.log('Migration v2.1 completed: ai_questions_shown added');
+    }
+
+    if (!columnNames.includes('step2_question')) {
+      console.log('Running migration v2.1: Adding step question columns...');
+      await db.execAsync(`
+        ALTER TABLE reflections ADD COLUMN step2_question TEXT;
+        ALTER TABLE reflections ADD COLUMN step3_question TEXT;
+        ALTER TABLE reflections ADD COLUMN step4_question TEXT;
+      `);
+      console.log('Migration v2.1 completed: step question columns added');
+    }
+  } catch (error) {
+    console.error('Error running migrations:', error);
+    // Don't throw - allow app to continue even if migration fails
   }
 }
 

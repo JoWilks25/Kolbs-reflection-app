@@ -23,9 +23,13 @@ const initialReflectionDraft: ReflectionDraft = {
   step2: '',
   step3: '',
   step4: '',
-  aiPlaceholdersShown: 0,
+  aiPlaceholdersShown: 0,  // DEPRECATED: kept for backward compatibility
+  aiQuestionsShown: 0,  // NEW: Count of AI-generated questions shown
   aiFollowupsShown: 0,
   aiFollowupsAnswered: 0,
+  step2Question: null,  // NEW: Stores actual generated question text
+  step3Question: null,  // NEW: Stores actual generated question text
+  step4Question: null,  // NEW: Stores actual generated question text
   feedbackRating: null,
   feedbackNote: '',
 };
@@ -154,6 +158,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
    */
   clearLastEndedSession: () => set({ lastEndedSessionId: null }),
 
+  /**
+   * Set the current session (used for reflection flow with ended sessions)
+   * This is separate from startSession which is for active sessions
+   */
+  setCurrentSession: (session: Session | null) => set({ currentSession: session }),
+
   // ============================================================================
   // AI Actions
   // ============================================================================
@@ -202,9 +212,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   /**
    * Increment an AI interaction metric counter
-   * @param metric - The metric to increment (aiPlaceholdersShown, aiFollowupsShown, aiFollowupsAnswered)
+   * @param metric - The metric to increment (aiQuestionsShown, aiFollowupsShown, aiFollowupsAnswered)
    */
-  incrementAiMetric: (metric: 'aiPlaceholdersShown' | 'aiFollowupsShown' | 'aiFollowupsAnswered') =>
+  incrementAiMetric: (metric: 'aiQuestionsShown' | 'aiFollowupsShown' | 'aiFollowupsAnswered') =>
     set((state) => ({
       reflectionDraft: {
         ...state.reflectionDraft,

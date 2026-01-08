@@ -53,7 +53,7 @@ const getToneLabel = (tone: CoachingTone | null): string | null => {
 // Get feedback emoji and label
 const getFeedbackDisplay = (rating: FeedbackRating): { emoji: string; label: string } | null => {
   if (rating === null) return null;
-  
+
   const displays = {
     0: { emoji: "😕", label: "Confusing" },
     1: { emoji: "😞", label: "Hard" },
@@ -61,7 +61,7 @@ const getFeedbackDisplay = (rating: FeedbackRating): { emoji: string; label: str
     3: { emoji: "🙂", label: "Good" },
     4: { emoji: "🚀", label: "Great" },
   };
-  
+
   return displays[rating] || null;
 };
 
@@ -83,8 +83,7 @@ const SessionCard = React.memo<{
   // Coaching tone label
   const toneLabel = getToneLabel(item.coaching_tone);
 
-  // Reflection state
-  const reflectionState = getReflectionState(item, item.reflection_completed_at ? {
+  const reflection = item.reflection_completed_at ? {
     id: '',
     session_id: item.id,
     coaching_tone: item.coaching_tone!,
@@ -95,11 +94,18 @@ const SessionCard = React.memo<{
     ai_placeholders_shown: 0,
     ai_followups_shown: 0,
     ai_followups_answered: 0,
+    ai_questions_shown: 0,
+    step2_question: null,
+    step3_question: null,
+    step4_question: null,
     feedback_rating: item.feedback_rating,
     feedback_note: null,
     completed_at: item.reflection_completed_at!,
     updated_at: item.reflection_updated_at,
-  } : null);
+  } : null
+
+  // Reflection state
+  const reflectionState = getReflectionState(item, reflection);
   const reflectionBadge = getReflectionBadge(reflectionState);
 
   // Feedback display
@@ -177,12 +183,12 @@ const SessionCard = React.memo<{
 const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
   const { practiceAreaId, focusSessionId } = route.params;
   const { setCoachingTone, clearReflectionDraft, setLastEndedSessionId } = useAppStore();
-  
+
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [sessions, setSessions] = useState<SessionWithReflection[]>([]);
   const [practiceAreaName, setPracticeAreaName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Modal state
   const [selectedSession, setSelectedSession] = useState<SessionWithReflection | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -200,7 +206,7 @@ const SeriesTimelineScreen: React.FC<Props> = ({ navigation, route }) => {
         console.error('Error loading practice area name:', error);
       }
     };
-    
+
     loadPracticeAreaName();
   }, [practiceAreaId, navigation]);
 

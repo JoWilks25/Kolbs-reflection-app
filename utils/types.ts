@@ -105,8 +105,14 @@ export interface Reflection {
 
   // AI interaction metrics (NEW in v2.0)
   ai_placeholders_shown: number;
+  ai_questions_shown: number;  // NEW: Count of AI-generated questions shown
   ai_followups_shown: number;
   ai_followups_answered: number;
+
+  // AI-generated question text (NEW: tracks actual questions shown)
+  step2_question: string | null;  // NULL if static prompt was used
+  step3_question: string | null;  // NULL if static prompt was used
+  step4_question: string | null;  // NULL if static prompt was used
 
   // Feedback
   feedback_rating: FeedbackRating;
@@ -152,8 +158,14 @@ export interface ReflectionDraft {
 
   // AI interaction tracking (NEW in v2.0)
   aiPlaceholdersShown: number;
+  aiQuestionsShown: number;  // NEW: Count of AI-generated questions shown
   aiFollowupsShown: number;
   aiFollowupsAnswered: number;
+
+  // AI-generated question text (NEW: tracks actual questions shown)
+  step2Question: string | null;  // NULL if static prompt was used
+  step3Question: string | null;  // NULL if static prompt was used
+  step4Question: string | null;  // NULL if static prompt was used
 
   feedbackRating: FeedbackRating;
   feedbackNote: string;
@@ -205,6 +217,7 @@ export interface AppActions {
   startSession: (session: Session, targetDuration?: number | null) => void;
   updateTimer: () => void;
   endSession: () => void;
+  setCurrentSession: (session: Session | null) => void;  // NEW: For reflection flow with ended sessions
   setLastEndedSessionId: (sessionId: string | null) => void;
   clearLastEndedSession: () => void;
 
@@ -218,7 +231,7 @@ export interface AppActions {
     field: K,
     value: ReflectionDraft[K]
   ) => void;
-  incrementAiMetric: (metric: 'aiPlaceholdersShown' | 'aiFollowupsShown' | 'aiFollowupsAnswered') => void;  // NEW
+  incrementAiMetric: (metric: 'aiQuestionsShown' | 'aiFollowupsShown' | 'aiFollowupsAnswered') => void;  // UPDATED: aiPlaceholdersShown -> aiQuestionsShown
   clearReflectionDraft: () => void;
 
   // UI actions
@@ -247,9 +260,15 @@ export interface ExportReflection {
   ai_assisted: boolean;
 
   // AI interaction metrics
-  ai_placeholders_shown: number;
+  ai_placeholders_shown: number;  // DEPRECATED: kept for backward compatibility
+  ai_questions_shown: number;  // NEW: Count of AI-generated questions shown
   ai_followups_shown: number;
   ai_followups_answered: number;
+
+  // AI-generated question text (NEW: tracks actual questions shown)
+  step2_question: string | null;  // NULL if static prompt was used
+  step3_question: string | null;  // NULL if static prompt was used
+  step4_question: string | null;  // NULL if static prompt was used
 
   // Kolb reflection answers (descriptive names for better LLM understanding)
   what_happened: string;      // Step 2: What actually happened during practice?
