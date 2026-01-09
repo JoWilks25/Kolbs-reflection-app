@@ -13,7 +13,7 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS } from "../utils/constants";
-import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, createSession, getBlockingUnreflectedSession, getSessionCount } from "../db/queries";
+import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, createSession, getBlockingUnreflectedSession } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
 import { generateId } from "../utils/uuid";
 import { analyzeIntentForFirstSession } from "../services/aiService";
@@ -50,7 +50,6 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     refinedSuggestions: string[] | null;
     feedback: string | null;
   } | null>(null);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
   const [warningShown, setWarningShown] = useState(false);
 
   useEffect(() => {
@@ -122,58 +121,6 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     previousIntent !== "No previous intent recorded" &&
     previousIntent !== "Error loading previous intent";
 
-  // Handle manual analysis trigger
-  const handleImproveIntent = async () => {
-    if (!aiAvailable || intentText.trim().length < 5) {
-      return;
-    }
-
-    setIsAnalyzing(true);
-    setAnalysis(null); // Clear previous analysis
-
-    try {
-      const result = await analyzeIntentForFirstSession(
-        intentText,
-        practiceAreaName,
-        practiceAreaType
-      );
-
-      setAnalysis(result);
-      setSelectedSuggestionIndex(null); // Clear selection when new analysis runs
-    } catch (error) {
-      console.error("Error analyzing intent:", error);
-      setAnalysis({
-        specificityLevel: "GENERIC",
-        clarifyingQuestions: null,
-        refinedSuggestions: null,
-        feedback: "Analysis unavailable - please try again",
-      });
-      setSelectedSuggestionIndex(null);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleSelectSuggestion = (index: number) => {
-    setSelectedSuggestionIndex(index);
-  };
-
-  const handleUseSuggestion = () => {
-    if (
-      analysis &&
-      analysis.specificityLevel === "PARTIALLY_SPECIFIC" &&
-      analysis.refinedSuggestions &&
-      selectedSuggestionIndex !== null &&
-      selectedSuggestionIndex >= 0 &&
-      selectedSuggestionIndex < analysis.refinedSuggestions.length
-    ) {
-      const selectedSuggestion = analysis.refinedSuggestions[selectedSuggestionIndex];
-      setIntentText(selectedSuggestion);
-      setAnalysis(null);
-      setSelectedSuggestionIndex(null);
-    }
-  };
-
   const handleStartSession = async () => {
     try {
       // Defensive re-check to prevent race conditions
@@ -207,7 +154,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
             setIsAnalyzing(false);
             return; // Don't create session yet
           } else {
-            // SPECIFIC - proceed with session creation
+            // SPECIFIC or PARTIALLY_SPECIFIC - proceed with session creation
             setWarningShown(false);
             setIsAnalyzing(false);
             // Continue to session creation below
@@ -301,10 +248,9 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
               value={intentText}
               onChangeText={(text) => {
                 setIntentText(text);
-                // Clear analysis and selection when user edits
+                // Clear analysis when user edits
                 if (analysis) {
                   setAnalysis(null);
-                  setSelectedSuggestionIndex(null);
                 }
                 // Reset warning state when user edits intent
                 setWarningShown(false);
@@ -314,105 +260,37 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
 
           </View>
 
-          {/* Analysis Results */}
-          {analysis && (
+          {/* Analysis Results - Only shown for GENERIC intents */}
+          {analysis && analysis.specificityLevel === "GENERIC" && (
             <View style={styles.analysisContainer}>
-              {analysis.specificityLevel === "SPECIFIC" ? (
-                // Positive feedback - intent is already good
-                <View style={styles.positiveContainer}>
-                  <Text style={styles.positiveIcon}>✓</Text>
-                  <View style={styles.positiveContent}>
-                    <Text style={styles.positiveTitle}>Your intent is clear and specific!</Text>
+              <View style={styles.suggestionContainer}>
+                <View style={styles.suggestionHeader}>
+                  <Text style={styles.suggestionIcon}>💡</Text>
+                  <Text style={styles.suggestionTitle}>Help refine your intent</Text>
+                </View>
+
+                {analysis.clarifyingQuestions && analysis.clarifyingQuestions.length > 0 ? (
+                  <>
                     {analysis.feedback && (
-                      <Text style={styles.positiveReasoning}>{analysis.feedback}</Text>
+                      <Text style={styles.suggestionReasoning}>
+                        {analysis.feedback}
+                      </Text>
                     )}
-                  </View>
-                </View>
-              ) : analysis.specificityLevel === "PARTIALLY_SPECIFIC" ? (
-                // Refined suggestions - user can select one
-                <View style={styles.suggestionContainer}>
-                  <View style={styles.suggestionHeader}>
-                    <Text style={styles.suggestionIcon}>💡</Text>
-                    <Text style={styles.suggestionTitle}>Refined suggestions</Text>
-                  </View>
 
-                  {analysis.feedback && (
-                    <Text style={styles.suggestionReasoning}>
-                      {analysis.feedback}
-                    </Text>
-                  )}
-
-                  {analysis.refinedSuggestions && analysis.refinedSuggestions.length > 0 ? (
-                    <>
-                      <View style={styles.suggestionsList}>
-                        {analysis.refinedSuggestions.map((suggestion, index) => (
-                          <TouchableOpacity
-                            key={index}
-                            style={[
-                              styles.suggestionItem,
-                              selectedSuggestionIndex === index && styles.suggestionItemSelected,
-                            ]}
-                            onPress={() => handleSelectSuggestion(index)}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={[
-                              styles.suggestionText,
-                              selectedSuggestionIndex === index && styles.suggestionTextSelected,
-                            ]}>
-                              {suggestion}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-
-                      {selectedSuggestionIndex !== null && (
-                        <TouchableOpacity
-                          style={styles.useSuggestionButton}
-                          onPress={handleUseSuggestion}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.useSuggestionButtonText}>Use this suggestion</Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  ) : (
-                    // Error state - no suggestions available
-                    <Text style={styles.errorText}>
-                      {analysis.feedback || "No suggestions available"}
-                    </Text>
-                  )}
-                </View>
-              ) : (
-                // GENERIC - Clarifying questions - intent needs improvement
-                <View style={styles.suggestionContainer}>
-                  <View style={styles.suggestionHeader}>
-                    <Text style={styles.suggestionIcon}>💡</Text>
-                    <Text style={styles.suggestionTitle}>Help refine your intent</Text>
-                  </View>
-
-                  {analysis.clarifyingQuestions && analysis.clarifyingQuestions.length > 0 ? (
-                    <>
-                      {analysis.feedback && (
-                        <Text style={styles.suggestionReasoning}>
-                          {analysis.feedback}
-                        </Text>
-                      )}
-
-                      <View style={styles.questionsList}>
-                        {analysis.clarifyingQuestions.map((question, index) => (
-                          <View key={index} style={styles.questionItem}>
-                            <Text style={styles.questionBullet}>•</Text>
-                            <Text style={styles.questionText}>{question}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    </>
-                  ) : (
-                    // Error state
-                    <Text style={styles.errorText}>{analysis.feedback}</Text>
-                  )}
-                </View>
-              )}
+                    <View style={styles.questionsList}>
+                      {analysis.clarifyingQuestions.map((question, index) => (
+                        <View key={index} style={styles.questionItem}>
+                          <Text style={styles.questionBullet}>•</Text>
+                          <Text style={styles.questionText}>{question}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  // Error state
+                  <Text style={styles.errorText}>{analysis.feedback}</Text>
+                )}
+              </View>
             </View>
           )}
 
@@ -630,63 +508,9 @@ const styles = StyleSheet.create({
   startButtonTextDisabled: {
     color: COLORS.text.disabled,
   },
-  improveButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F0F7FF",
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: 8,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    marginTop: SPACING.sm,
-    gap: SPACING.xs,
-  },
-  improveButtonDisabled: {
-    opacity: 0.5,
-  },
-  improveButtonIcon: {
-    fontSize: 16,
-  },
-  improveButtonText: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-  },
   analysisContainer: {
     marginBottom: SPACING.md,
   },
-  // Positive feedback styles
-  positiveContainer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#F1F8F4",
-    borderRadius: 8,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.success,
-    gap: SPACING.sm,
-  },
-  positiveIcon: {
-    fontSize: 24,
-    color: COLORS.success,
-  },
-  positiveContent: {
-    flex: 1,
-  },
-  positiveTitle: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    color: "#2E7D32",
-    marginBottom: SPACING.xs,
-  },
-  positiveReasoning: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.text.primary,
-    lineHeight: TYPOGRAPHY.fontSize.sm * TYPOGRAPHY.lineHeight.normal,
-  },
-  // Suggestion styles
   suggestionContainer: {
     backgroundColor: "#FFF9E6",
     borderRadius: 8,
@@ -707,13 +531,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.primary,
-  },
-  suggestionText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-    lineHeight: TYPOGRAPHY.fontSize.md * TYPOGRAPHY.lineHeight.normal,
-    marginBottom: SPACING.xs,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
   },
   suggestionReasoning: {
     fontSize: TYPOGRAPHY.fontSize.sm,
@@ -741,71 +558,6 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     lineHeight: TYPOGRAPHY.fontSize.sm * TYPOGRAPHY.lineHeight.normal,
   },
-  suggestionButtons: {
-    flexDirection: "row",
-    gap: SPACING.xs,
-  },
-  suggestionButtonPrimary: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 6,
-    alignItems: "center",
-  },
-  suggestionButtonPrimaryText: {
-    color: COLORS.text.inverse,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-  },
-  suggestionButtonSecondary: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 6,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: COLORS.neutral[200],
-  },
-  suggestionButtonSecondaryText: {
-    color: COLORS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-  },
-  suggestionsList: {
-    marginBottom: SPACING.md,
-  },
-  suggestionItem: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-    borderWidth: 2,
-    borderColor: COLORS.neutral[200],
-  },
-  suggestionItemSelected: {
-    borderColor: COLORS.primary,
-    backgroundColor: "#F0F7FF",
-  },
-  suggestionTextSelected: {
-    color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-  },
-  useSuggestionButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: SPACING.xs,
-  },
-  useSuggestionButtonText: {
-    color: COLORS.text.inverse,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-  },
   errorText: {
     fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.error,
@@ -814,5 +566,3 @@ const styles = StyleSheet.create({
 });
 
 export default SessionSetupScreen;
-
-
