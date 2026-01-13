@@ -184,14 +184,11 @@ export const useAICoaching = (
 
   /**
    * Check if a follow-up question should be generated based on answer length
+   * Works with or without AI - uses hardcoded follow-ups when AI is unavailable
    */
   const checkForFollowup = useCallback(async (userAnswer: string) => {
     // Clear existing follow-up
     setFollowup(null);
-
-    if (!aiActive) {
-      return;
-    }
 
     // Only show follow-up for brief answers (< 150 chars)
     if (userAnswer.length >= 150 || userAnswer.length === 0) {
@@ -201,11 +198,15 @@ export const useAICoaching = (
     const context = buildContext();
     if (!context) return;
 
+    // Use hardcoded follow-ups when AI is not active
+    const useHardcoded = !aiActive;
+
     try {
-      const result = await generateFollowup(context, step, userAnswer);
+      const result = await generateFollowup(context, step, userAnswer, useHardcoded);
       setFollowup(result);
 
-      if (result) {
+      // Only track AI metrics for AI-generated follow-ups
+      if (result && aiActive) {
         incrementAiMetric('aiFollowupsShown');
       }
     } catch (error) {

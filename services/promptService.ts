@@ -74,6 +74,56 @@ const FOLLOWUP_MATRIX: Record<CoachingTone, Record<PracticeAreaType, string>> = 
 };
 
 /**
+ * Step 3 follow-up question matrix: Tone × Type
+ * Focus: Learning, insights, patterns, realizations
+ */
+const STEP3_FOLLOWUP_MATRIX: Record<CoachingTone, Record<PracticeAreaType, string>> = {
+  1: { // Facilitative
+    solo_skill: 'What patterns did you notice in your technique?',
+    performance: 'How did your internal experience differ from what you think others saw?',
+    interpersonal: 'What did you learn about how the other person experienced the interaction?',
+    creative: 'What surprised you about where your ideas led you?',
+  },
+  2: { // Socratic
+    solo_skill: 'What assumptions about your technique proved incorrect?',
+    performance: 'What thought patterns affected your performance?',
+    interpersonal: 'What evidence do you have for your interpretation of their response?',
+    creative: 'What constraints or habits shaped your creative choices?',
+  },
+  3: { // Supportive
+    solo_skill: 'Which part of your technique are you most proud of improving?',
+    performance: 'What helped you push through the challenging moments?',
+    interpersonal: 'What felt uncomfortable, and how did you navigate it?',
+    creative: 'What moments felt like you were in flow?',
+  },
+};
+
+/**
+ * Step 4 follow-up question matrix: Tone × Type
+ * Focus: Next actions, experiments, adjustments, plans
+ */
+const STEP4_FOLLOWUP_MATRIX: Record<CoachingTone, Record<PracticeAreaType, string>> = {
+  1: { // Facilitative
+    solo_skill: 'What specific adjustment do you want to explore next?',
+    performance: 'What will you experiment with in your next performance?',
+    interpersonal: 'What approach will you try in your next interaction?',
+    creative: 'What direction do you want to explore further?',
+  },
+  2: { // Socratic
+    solo_skill: 'What specific change will you test to address the pattern you noticed?',
+    performance: 'What specific technique will you practice to address the thought patterns?',
+    interpersonal: 'What specific approach will you try based on what you learned?',
+    creative: 'What specific constraint will you challenge in your next attempt?',
+  },
+  3: { // Supportive
+    solo_skill: 'What specific step will you take to build on what worked?',
+    performance: 'What specific strategy will you use to maintain what helped you?',
+    interpersonal: 'What specific approach will you try to build on the positive moments?',
+    creative: 'What specific element will you explore to recreate that flow state?',
+  },
+};
+
+/**
  * Build a prompt for generating follow-up questions
  * 
  * @param context - AI context with practice area, intent, and tone info
@@ -139,6 +189,64 @@ export const getStep2FollowupNudge = (
   };
 
   return nudges[tone];
+};
+
+/**
+ * Get a tone-adapted nudge for Step 3 follow-up when answer is brief
+ * 
+ * @param context - AI context with practice area, tone, and type info
+ * @param userAnswerLength - Length of the user's answer in characters
+ * @returns Follow-up question string if answer is brief (< 150 chars), null otherwise
+ */
+export const getStep3FollowupNudge = (
+  context: AIContext,
+  userAnswerLength: number
+): string | null => {
+  // Only show if answer is brief (< 150 chars)
+  if (userAnswerLength >= 150) return null;
+
+  return STEP3_FOLLOWUP_MATRIX[context.coachingTone][context.practiceAreaType];
+};
+
+/**
+ * Get a tone-adapted nudge for Step 4 follow-up when answer is brief
+ * 
+ * @param context - AI context with practice area, tone, and type info
+ * @param userAnswerLength - Length of the user's answer in characters
+ * @returns Follow-up question string if answer is brief (< 150 chars), null otherwise
+ */
+export const getStep4FollowupNudge = (
+  context: AIContext,
+  userAnswerLength: number
+): string | null => {
+  // Only show if answer is brief (< 150 chars)
+  if (userAnswerLength >= 150) return null;
+
+  return STEP4_FOLLOWUP_MATRIX[context.coachingTone][context.practiceAreaType];
+};
+
+/**
+ * Get a hardcoded follow-up question for any step
+ * Routes to the appropriate step-specific function
+ * 
+ * @param context - AI context with practice area, tone, and type info
+ * @param step - Kolb step (2, 3, or 4)
+ * @param userAnswerLength - Length of the user's answer in characters
+ * @returns Follow-up question string if answer is brief, null otherwise
+ */
+export const getHardcodedFollowup = (
+  context: AIContext,
+  step: 2 | 3 | 4,
+  userAnswerLength: number
+): string | null => {
+  switch (step) {
+    case 2:
+      return getStep2FollowupNudge(context.coachingTone, userAnswerLength);
+    case 3:
+      return getStep3FollowupNudge(context, userAnswerLength);
+    case 4:
+      return getStep4FollowupNudge(context, userAnswerLength);
+  }
 };
 
 /**
