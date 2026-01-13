@@ -12,7 +12,7 @@
 import { apple } from '@react-native-ai/apple';
 import { generateText } from 'ai';
 import { Platform } from 'react-native';
-import { buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, type AIContext } from './promptService';
+import { buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, getStep2FollowupNudge, type AIContext } from './promptService';
 import type { CoachingTone, PracticeAreaType } from '../utils/types';
 import { TONE_PROMPTS } from '../utils/constants';
 
@@ -155,6 +155,12 @@ export const generateFollowup = async (
     return null;
   }
 
+  // For step 2, use tone-adapted nudge instead of AI generation
+  if (step === 2) {
+    return getStep2FollowupNudge(context.coachingTone, userAnswer.length);
+  }
+
+  // For steps 3 and 4, use AI generation
   const prompt = buildFollowupPrompt(context, step, userAnswer);
 
   try {

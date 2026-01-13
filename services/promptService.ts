@@ -118,6 +118,30 @@ export const getFollowupExample = (
 };
 
 /**
+ * Get a tone-adapted nudge for Step 2 follow-up when answer is brief
+ * 
+ * @param tone - Coaching tone (1=Facilitative, 2=Socratic, 3=Supportive)
+ * @param userAnswerLength - Length of the user's answer in characters
+ * @returns Nudge string if answer is brief (< 100 chars), null otherwise
+ */
+export const getStep2FollowupNudge = (
+  tone: CoachingTone,
+  userAnswerLength: number
+): string | null => {
+  // Only show if answer is quite brief (< 100 chars ~15-20 words)
+  if (userAnswerLength >= 100) return null;
+
+  // Tone-adapted nudges that focus on getting MORE STEPS
+  const nudges: Record<CoachingTone, string> = {
+    1: "Your answer is brief. Can you walk through a few more of the steps you took?",
+    2: "That's a start. What were the other specific actions you took?",
+    3: "You're on track! What else did you do during the practice?",
+  };
+
+  return nudges[tone];
+};
+
+/**
  * Get human-readable tone name
  * Internal helper function
  */
