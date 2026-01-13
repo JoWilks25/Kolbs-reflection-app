@@ -29,7 +29,7 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
     );
 
     const tableNames = tables.map(t => t.name);
-    const requiredTables = ['practiceareas', 'sessions', 'reflections'];
+    const requiredTables = ['practice_areas', 'sessions', 'reflections'];
     const tablesExist = requiredTables.every(table => tableNames.includes(table));
 
     // Only run schema if tables don't exist
@@ -90,25 +90,57 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     // Migration v2.1: Add ai_questions_shown and step question columns
     if (!columnNames.includes('ai_questions_shown')) {
       console.log('Running migration v2.1: Adding ai_questions_shown column...');
-      await db.execAsync(`
-        ALTER TABLE reflections ADD COLUMN ai_questions_shown INTEGER DEFAULT 0;
-        UPDATE reflections SET ai_questions_shown = 0 WHERE ai_questions_shown IS NULL;
-      `);
-      console.log('Migration v2.1 completed: ai_questions_shown added');
+      try {
+        await db.runAsync('ALTER TABLE reflections ADD COLUMN ai_questions_shown INTEGER DEFAULT 0');
+        await db.runAsync('UPDATE reflections SET ai_questions_shown = 0 WHERE ai_questions_shown IS NULL');
+        console.log('Migration v2.1 completed: ai_questions_shown added');
+      } catch (error) {
+        console.error('Error adding ai_questions_shown column:', error);
+        throw error; // Re-throw to prevent silent failures
+      }
     }
 
     if (!columnNames.includes('step2_question')) {
       console.log('Running migration v2.1: Adding step question columns...');
-      await db.execAsync(`
-        ALTER TABLE reflections ADD COLUMN step2_question TEXT;
-        ALTER TABLE reflections ADD COLUMN step3_question TEXT;
-        ALTER TABLE reflections ADD COLUMN step4_question TEXT;
-      `);
-      console.log('Migration v2.1 completed: step question columns added');
+      try {
+        await db.runAsync('ALTER TABLE reflections ADD COLUMN step2_question TEXT');
+        await db.runAsync('ALTER TABLE reflections ADD COLUMN step3_question TEXT');
+        await db.runAsync('ALTER TABLE reflections ADD COLUMN step4_question TEXT');
+        console.log('Migration v2.1 completed: step question columns added');
+      } catch (error) {
+        console.error('Error adding step question columns:', error);
+        throw error; // Re-throw to prevent silent failures
+      }
+    }
+
+    // Migration v2.2: Add intent refinement tracking columns to sessions
+    const sessionColumns = await db.getAllAsync<{ name: string }>(
+      "PRAGMA table_info(sessions)"
+    );
+    const sessionColumnNames = sessionColumns.map(col => col.name);
+
+    if (!sessionColumnNames.includes('intent_refined')) {
+      console.log('Running migration v2.2: Adding intent refinement columns...');
+      try {
+        // Run each ALTER TABLE statement separately for better error handling
+        await db.runAsync('ALTER TABLE sessions ADD COLUMN intent_refined INTEGER DEFAULT 0');
+        await db.runAsync('ALTER TABLE sessions ADD COLUMN original_intent TEXT');
+        await db.runAsync('ALTER TABLE sessions ADD COLUMN intent_analysis_requested INTEGER DEFAULT 0');
+
+        // Update existing rows
+        await db.runAsync('UPDATE sessions SET intent_refined = 0 WHERE intent_refined IS NULL');
+        await db.runAsync('UPDATE sessions SET intent_analysis_requested = 0 WHERE intent_analysis_requested IS NULL');
+
+        console.log('Migration v2.2 completed: intent refinement columns added');
+      } catch (error) {
+        console.error('Error adding intent refinement columns:', error);
+        throw error; // Re-throw to prevent silent failures
+      }
     }
   } catch (error) {
     console.error('Error running migrations:', error);
-    // Don't throw - allow app to continue even if migration fails
+    // Re-throw to ensure migration failures are visible
+    throw error;
   }
 }
 

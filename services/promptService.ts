@@ -49,15 +49,6 @@ const TYPE_MODIFIERS: Record<PracticeAreaType, string> = {
 };
 
 /**
- * Step-specific instructions for placeholder generation
- */
-const PLACEHOLDER_STEP_INSTRUCTIONS: Record<2 | 3 | 4, string> = {
-  2: `Generate a brief placeholder starter (3-6 words) for describing what happened during practice. Example: "I focused on..." or "The main challenge was..."`,
-  3: `Generate a brief placeholder starter (3-6 words) for identifying a lesson or pattern. Example: "I noticed that..." or "The key insight was..."`,
-  4: `Generate a brief placeholder starter (3-6 words) for planning next steps. Example: "Next time I will..." or "I want to try..."`,
-};
-
-/**
  * Step-specific guidance for question generation
  */
 const STEP_QUESTION_GUIDANCE: Record<2 | 3 | 4, string> = {
@@ -95,35 +86,6 @@ const FOLLOWUP_MATRIX: Record<CoachingTone, Record<PracticeAreaType, string>> = 
     interpersonal: 'What felt uncomfortable, and how did you navigate it?',
     creative: 'What moments felt like you were in flow?',
   },
-};
-
-/**
- * Build a prompt for generating placeholder starter text
- * 
- * @param context - AI context with practice area, intent, and tone info
- * @param step - Kolb step (2, 3, or 4)
- * @returns Full prompt string for the LLM
- */
-export const buildPlaceholderPrompt = (
-  context: AIContext,
-  step: 2 | 3 | 4,
-): string => {
-  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
-  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
-  const stepInstruction = PLACEHOLDER_STEP_INSTRUCTIONS[step];
-
-  return `${tonePrompt}
-
-${typeModifier}
-
-Context:
-- Practice Area: ${context.practiceAreaName}
-- Today's Intent: ${context.sessionIntent}
-${context.previousStep4Answer ? `- Previous Session Goal: ${context.previousStep4Answer}` : ''}
-
-${stepInstruction}
-
-Respond with ONLY the placeholder text, nothing else.`;
 };
 
 /**
@@ -250,32 +212,96 @@ export const buildStepQuestionPrompt = (
       Generate the question now:`.trim();
 };
 
-/**
- * Get the tone-adapted base prompt for each Kolb step
- * Used when AI is disabled but coaching tone is still selected
- */
-export const getTonePromptForStep = (
-  tone: CoachingTone,
-  step: 2 | 3 | 4,
+
+export const buildIntentAnalysisPrompt = (
+  userIntent: string,
+  practiceAreaName: string,
+  practiceAreaType: PracticeAreaType,
 ): string => {
-  const prompts: Record<CoachingTone, Record<2 | 3 | 4, string>> = {
-    1: { // Facilitative
-      2: "What happened during this practice? Which moments stood out to you most?",
-      3: "What are you noticing about yourself or your approach?",
-      4: "What do you feel ready to explore or try next time?",
+
+  // Classification formulas by type (element counting)
+  const formulas = {
+    solo_skill: {
+      elements: 'technique, material, tempo/target, focus area',
+      generic: '0 elements (just medium/instrument)',
+      actionable: '>=1 elements',
+      examples: {
+        generic: '"practice", "practice guitar", "work on coding"',
+        actionable: '"practice scales" (technique), "read chapter 3" (material), "scales at 80 BPM" (technique+tempo)'
+      }
     },
-    2: { // Socratic
-      2: "What actually happened, step by step? What was different from what you expected?",
-      3: "Looking back, what worked and what didn't? What patterns are you seeing?",
-      4: "What specific change will you test in your next session?",
+    performance: {
+      elements: 'section, scenario, challenge, technique',
+      generic: '0 elements (just performance type)',
+      actionable: '>=1 elements',
+      examples: {
+        generic: '"practice", "practice presentation", "work on performance"',
+        actionable: '"practice Q&A" (section), "manage nervousness" (challenge), "Q&A with 3-sec pause" (section+technique)'
+      }
     },
-    3: { // Supportive
-      2: "What happened in this session? What parts felt most challenging or successful?",
-      3: "What's the main thing you're taking away from this? What felt like progress?",
-      4: "What's one small thing you'll focus on next time?",
+    interpersonal: {
+      elements: 'person, situation/topic',
+      generic: '0-1 elements (missing person OR topic)',
+      actionable: '2 elements (person AND topic required)',
+      examples: {
+        generic: '"practice", "practice communication", "talk to partner" (person only)',
+        actionable: '"discuss chores with partner" (person+topic), "set boundaries with manager" (person+topic)'
+      }
     },
+    creative: {
+      elements: 'genre, theme, focus, constraint',
+      generic: '0 elements (just medium)',
+      actionable: '>=1 elements',
+      examples: {
+        generic: '"practice", "practice writing", "work on art"',
+        actionable: '"write fiction" (genre), "brainstorm ideas" (activity), "write 500 words" (constraint)'
+      }
+    }
   };
 
-  return prompts[tone][step];
-};
+  const f = formulas[practiceAreaType];
 
+  return `Classify this first session practice intent as GENERIC or SPECIFIC.
+
+Practice Area: ${practiceAreaName} (${practiceAreaType})
+User intent: "${userIntent}"
+
+ELEMENT COUNTING FOR ${practiceAreaType}:
+
+Elements to identify: ${f.elements}
+
+GENERIC = ${f.generic}
+  Examples: ${f.examples.generic}
+  
+SPECIFIC = ${f.actionable}
+  Examples: ${f.examples.actionable}
+
+CLASSIFICATION STEPS:
+1. Identify which elements from the list are present in the intent
+2. Count the elements
+3. Apply the rule: ${f.generic} → GENERIC, ${f.actionable} → SPECIFIC
+
+RULES:
+- Default to SPECIFIC when in doubt
+- "practice [something]" where [something] is from the elements list → SPECIFIC
+- Just naming the practice area/medium → GENERIC
+
+FIRST SESSION GUIDANCE:
+- If GENERIC: Ask 2-3 open-ended clarifying questions to help user identify what aspect to practice
+- If SPECIFIC: Accept immediately and start session. No refinement suggestions needed.
+
+CRITICAL OUTPUT RULES:
+- specificityLevel must be "GENERIC" or "SPECIFIC"
+- refinedSuggestions must always be null for first sessions
+- If specificityLevel is "SPECIFIC", clarifyingQuestions must be null
+- If specificityLevel is "GENERIC", clarifyingQuestions must be an array with 2-3 questions
+
+ONLY OUTPUT SHOULD BE JSON IN THIS FORMAT:
+{
+  "specificityLevel": "GENERIC" | "SPECIFIC",
+  "clarifyingQuestions": ["question1", "question2"] | null,
+  "refinedSuggestions": null,
+  "feedback": "brief explanation showing element count and classification reasoning"
+}
+`.trim();
+};

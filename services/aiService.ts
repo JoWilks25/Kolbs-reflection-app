@@ -12,8 +12,9 @@
 import { apple } from '@react-native-ai/apple';
 import { generateText } from 'ai';
 import { Platform } from 'react-native';
-import { buildPlaceholderPrompt, buildFollowupPrompt, buildStepQuestionPrompt, getTonePromptForStep, type AIContext } from './promptService';
-import type { CoachingTone } from '../utils/types';
+import { buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, type AIContext } from './promptService';
+import type { CoachingTone, PracticeAreaType } from '../utils/types';
+import { TONE_PROMPTS } from '../utils/constants';
 
 // Re-export AIContext for consumers
 export type { AIContext } from './promptService';
@@ -58,47 +59,6 @@ export const checkAIAvailability = async (): Promise<boolean> => {
 };
 
 /**
- * Generate a placeholder starter for a Kolb step
- * 
- * Creates a brief (3-6 word) contextual starter phrase to help users
- * begin their reflection. Example: "I focused on..." or "The main challenge was..."
- * 
- * @deprecated This function is kept for backward compatibility but is no longer used.
- * Use generateStepQuestion() instead for AI-generated questions.
- * 
- * @param context - AI context with practice area, intent, and tone
- * @param step - Kolb step (2, 3, or 4)
- * @returns Generated placeholder text, or null if generation fails
- */
-export const generatePlaceholder = async (
-  context: AIContext,
-  step: 2 | 3 | 4,
-): Promise<string | null> => {
-  const prompt = buildPlaceholderPrompt(context, step);
-
-  try {
-    const startTime = Date.now();
-
-    const result = await generateText({
-      model: apple() as any, // Type assertion to work around dependency version mismatch
-      prompt,
-      maxOutputTokens: 50, // Changed from maxTokens to maxOutputTokens
-      temperature: 0.7,
-    });
-
-    const latency = Date.now() - startTime;
-    if (latency > LATENCY_WARNING_THRESHOLD) {
-      console.warn(`AI placeholder latency exceeded target: ${latency}ms`);
-    }
-
-    return result.text?.trim() || null;
-  } catch (error) {
-    console.error('Placeholder generation failed:', error);
-    return null;
-  }
-};
-
-/**
  * Generate a context-specific question for a Kolb reflection step
  * This replaces the static prompts with AI-generated, personalized questions
  * 
@@ -138,6 +98,26 @@ export const generateStepQuestion = async (
   } catch (error) {
     console.error('Step question generation failed:', error);
     return null; // Will fallback to static prompt
+  }
+};
+
+/**
+ * Get tone-adapted prompt for a specific step
+ * 
+ * @param tone - Coaching tone (1=Facilitative, 2=Socratic, 3=Supportive)
+ * @param step - Kolb step (2, 3, or 4)
+ * @returns Static prompt string for the given tone and step
+ */
+const getTonePromptForStep = (
+  tone: CoachingTone,
+  step: 2 | 3 | 4,
+): string => {
+  if (step === 2) {
+    return TONE_PROMPTS[tone].step2;
+  } else if (step === 3) {
+    return TONE_PROMPTS[tone].step3;
+  } else {
+    return TONE_PROMPTS[tone].step4;
   }
 };
 
@@ -197,5 +177,79 @@ export const generateFollowup = async (
   } catch (error) {
     console.error('Follow-up generation failed:', error);
     return null;
+  }
+};
+
+/**
+ * Analyze user intent and provide refinement suggestion if too generic
+ * Called when user explicitly clicks "Improve Intent" button
+ * 
+ * @param userIntent - The user's current intent text
+ * @param practiceAreaName - Name of the practice area
+ * @param practiceAreaType - Type of practice area
+ * @param previousStep4Answer - Previous session's step 4 answer (next action), or null
+ * @param practiceAreaId - The ID of the practice area (for fetching session history)
+ * @param currentSessionId - Optional current session ID to exclude from recent intents (null during session setup)
+ * @returns Analysis result with specificity flag, suggestion, and reasoning
+ */
+export const analyzeIntentForFirstSession = async (
+  userIntent: string,
+  practiceAreaName: string,
+  practiceAreaType: PracticeAreaType,
+): Promise<{
+  specificityLevel: "GENERIC" | "PARTIALLY_SPECIFIC" | "SPECIFIC";
+  clarifyingQuestions: string[] | null;
+  refinedSuggestions: string[] | null;
+  feedback: string | null;
+}> => {
+  // Validate minimum length
+  if (userIntent.trim().length < 5) {
+    return {
+      specificityLevel: "GENERIC",
+      clarifyingQuestions: null,
+      refinedSuggestions: null,
+      feedback: "Intent too short - add more detail"
+    };
+  }
+
+  const prompt = buildIntentAnalysisPrompt(
+    userIntent,
+    practiceAreaName,
+    practiceAreaType,
+  );
+
+  try {
+    const startTime = Date.now();
+    const result = await generateText({
+      model: apple() as any, // Type assertion to work around dependency version mismatch
+      prompt,
+      maxOutputTokens: 150, // Slightly more for reasoning
+      temperature: 0.6,
+    });
+
+    const latency = Date.now() - startTime;
+    if (latency > LATENCY_WARNING_THRESHOLD) {
+      console.warn(`Intent analysis latency exceeded target: ${latency}ms`);
+    }
+
+    // Parse response: expect JSON format
+    // {"specificityLevel": "GENERIC" | "SPECIFIC", "clarifyingQuestions": [...], "refinedSuggestions": null, "feedback": "..."}
+    const parsed = JSON.parse(result.text.trim().replaceAll('`', '').replace("json", ""));
+
+    return {
+      specificityLevel: parsed.specificityLevel,
+      clarifyingQuestions: parsed.clarifyingQuestions || null,
+      refinedSuggestions: null, // First sessions don't need refined suggestions
+      feedback: parsed.feedback || null,
+    };
+  } catch (error) {
+    console.error('Intent analysis failed:', error);
+    // Return error state
+    return {
+      specificityLevel: "GENERIC",
+      clarifyingQuestions: null,
+      refinedSuggestions: null,
+      feedback: "Analysis unavailable - please try again"
+    };
   }
 };

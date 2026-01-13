@@ -28,12 +28,15 @@ CREATE TABLE IF NOT EXISTS practice_areas (
   is_deleted INTEGER DEFAULT 0
 );
 
--- Sessions (unchanged from v1)
+-- Sessions (UPDATED in v2.2: Added intent refinement tracking)
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   practice_area_id TEXT NOT NULL,
   previous_session_id TEXT,       -- NULL only for first session in a Practice Area
   intent TEXT NOT NULL,
+  intent_refined INTEGER DEFAULT 0,  -- NEW in v2.2: 0 = not refined, 1 = user accepted AI refinement
+  original_intent TEXT,               -- NEW in v2.2: Original intent if refined, null otherwise
+  intent_analysis_requested INTEGER DEFAULT 0,  -- NEW in v2.2: 0 = not requested, 1 = user clicked "Improve Intent"
   target_duration_seconds INTEGER,  -- NULL = no target, just stopwatch
   started_at INTEGER NOT NULL,
   ended_at INTEGER,               -- NULL if session still active

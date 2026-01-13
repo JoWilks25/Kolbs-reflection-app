@@ -16,6 +16,8 @@ import { COLORS, SPACING, TYPOGRAPHY, TARGET_DURATION_PRESETS } from "../utils/c
 import { getPreviousSessionIntent, getPracticeAreaById, getLastSessionId, createSession, getBlockingUnreflectedSession } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
 import { generateId } from "../utils/uuid";
+import { analyzeIntentForFirstSession } from "../services/aiService";
+import type { PracticeAreaType } from "../utils/types";
 
 type SessionSetupScreenRouteProp = RouteProp<RootStackParamList, "SessionSetup">;
 type SessionSetupScreenNavigationProp = StackNavigationProp<RootStackParamList, "SessionSetup">;
@@ -27,25 +29,38 @@ type Props = {
 const SessionSetupScreen: React.FC<Props> = ({ route }) => {
   const { practiceAreaId } = route.params;
   const navigation = useNavigation<SessionSetupScreenNavigationProp>();
-  const { startSession } = useAppStore();
+  const { startSession, aiAvailable } = useAppStore();
 
   const [previousIntent, setPreviousIntent] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [practiceAreaName, setPracticeAreaName] = useState<string>("");
+  const [practiceAreaType, setPracticeAreaType] = useState<PracticeAreaType>("solo_skill");
+  const [previousStep4Answer, setPreviousStep4Answer] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // New session input state
   const [intentText, setIntentText] = useState("");
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
 
+  // Intent analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<{
+    specificityLevel: "GENERIC" | "PARTIALLY_SPECIFIC" | "SPECIFIC";
+    clarifyingQuestions: string[] | null;
+    refinedSuggestions: string[] | null;
+    feedback: string | null;
+  } | null>(null);
+  const [warningShown, setWarningShown] = useState(false);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        // Load Practice Area name
+        // Load Practice Area name and type
         const practiceArea = await getPracticeAreaById(practiceAreaId);
         if (practiceArea) {
           setPracticeAreaName(practiceArea.name);
+          setPracticeAreaType(practiceArea.type);
           // Update header title
           navigation.setOptions({ title: practiceArea.name });
         }
@@ -54,14 +69,18 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
         const result = await getPreviousSessionIntent(practiceAreaId) as any;
         if (!result) {
           setPreviousIntent("No previous sessions");
+          setPreviousStep4Answer(null);
         } else if (!result.previous_next_action) {
           setPreviousIntent("No previous intent recorded");
+          setPreviousStep4Answer(null);
         } else {
           setPreviousIntent(result.previous_next_action);
+          setPreviousStep4Answer(result.previous_next_action);
         }
       } catch (error) {
         console.error("Error loading session setup data:", error);
         setPreviousIntent("Error loading previous intent");
+        setPreviousStep4Answer(null);
       } finally {
         setIsLoading(false);
       }
@@ -114,8 +133,45 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
         return;
       }
 
+      // If warning was shown, user is clicking through - proceed with session creation
+      if (warningShown) {
+        setWarningShown(false);
+        // Continue to session creation below
+      } else if (previousStep4Answer === null && aiAvailable && !warningShown) {
+        // First session with AI available - check intent specificity
+        setIsAnalyzing(true);
+        try {
+          const result = await analyzeIntentForFirstSession(
+            intentText,
+            practiceAreaName,
+            practiceAreaType
+          );
+
+          if (result.specificityLevel === "GENERIC") {
+            // Show warning with clarifying questions
+            setAnalysis(result);
+            setWarningShown(true);
+            setIsAnalyzing(false);
+            return; // Don't create session yet
+          } else {
+            // SPECIFIC or PARTIALLY_SPECIFIC - proceed with session creation
+            setWarningShown(false);
+            setIsAnalyzing(false);
+            // Continue to session creation below
+          }
+        } catch (error) {
+          console.error("Error analyzing intent:", error);
+          setIsAnalyzing(false);
+          // Continue to session creation on error (graceful degradation)
+        }
+      }
+
       // Get last session ID for sequential linking
       const lastSessionId = await getLastSessionId(practiceAreaId);
+
+      // Track if intent analysis was requested (clarifying questions don't provide direct suggestions)
+      const intentRefined = 0; // No longer tracking refinement since we use clarifying questions
+      const intentAnalysisRequested = analysis !== null || isAnalyzing;
 
       // Create new session object
       const newSession = {
@@ -123,6 +179,9 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
         practice_area_id: practiceAreaId,
         previous_session_id: lastSessionId, // NULL for first session
         intent: intentText.trim(),
+        intent_refined: intentRefined ? 1 : 0,
+        original_intent: null, // No longer tracking original intent since we use clarifying questions
+        intent_analysis_requested: intentAnalysisRequested ? 1 : 0,
         target_duration_seconds: selectedDuration,
         started_at: Date.now(),
         ended_at: null,
@@ -142,7 +201,7 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
     }
   };
 
-  const isStartDisabled = intentText.trim().length === 0;
+  const isStartDisabled = intentText.trim().length === 0 || isAnalyzing;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -187,10 +246,53 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
               placeholder="Enter your intent..."
               placeholderTextColor={COLORS.text.disabled}
               value={intentText}
-              onChangeText={setIntentText}
+              onChangeText={(text) => {
+                setIntentText(text);
+                // Clear analysis when user edits
+                if (analysis) {
+                  setAnalysis(null);
+                }
+                // Reset warning state when user edits intent
+                setWarningShown(false);
+              }}
               textAlignVertical="top"
             />
+
           </View>
+
+          {/* Analysis Results - Only shown for GENERIC intents */}
+          {analysis && analysis.specificityLevel === "GENERIC" && (
+            <View style={styles.analysisContainer}>
+              <View style={styles.suggestionContainer}>
+                <View style={styles.suggestionHeader}>
+                  <Text style={styles.suggestionIcon}>💡</Text>
+                  <Text style={styles.suggestionTitle}>Help refine your intent</Text>
+                </View>
+
+                {analysis.clarifyingQuestions && analysis.clarifyingQuestions.length > 0 ? (
+                  <>
+                    {analysis.feedback && (
+                      <Text style={styles.suggestionReasoning}>
+                        {analysis.feedback}
+                      </Text>
+                    )}
+
+                    <View style={styles.questionsList}>
+                      {analysis.clarifyingQuestions.map((question, index) => (
+                        <View key={index} style={styles.questionItem}>
+                          <Text style={styles.questionBullet}>•</Text>
+                          <Text style={styles.questionText}>{question}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  // Error state
+                  <Text style={styles.errorText}>{analysis.feedback}</Text>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Target Duration Section */}
           <View style={styles.durationSection}>
@@ -229,9 +331,18 @@ const SessionSetupScreen: React.FC<Props> = ({ route }) => {
             disabled={isStartDisabled}
             activeOpacity={0.7}
           >
-            <Text style={[styles.startButtonText, isStartDisabled && styles.startButtonTextDisabled]}>
-              Start Session
-            </Text>
+            {isAnalyzing ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
+                <ActivityIndicator size="small" color={COLORS.text.inverse} />
+                <Text style={[styles.startButtonText, isStartDisabled && styles.startButtonTextDisabled]}>
+                  Analyzing...
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.startButtonText, isStartDisabled && styles.startButtonTextDisabled]}>
+                {warningShown ? "Start Session Anyway" : "Start Session"}
+              </Text>
+            )}
           </TouchableOpacity>
         </>
       )}
@@ -397,8 +508,61 @@ const styles = StyleSheet.create({
   startButtonTextDisabled: {
     color: COLORS.text.disabled,
   },
+  analysisContainer: {
+    marginBottom: SPACING.md,
+  },
+  suggestionContainer: {
+    backgroundColor: "#FFF9E6",
+    borderRadius: 8,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: "#FFE082",
+  },
+  suggestionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  suggestionIcon: {
+    fontSize: 20,
+  },
+  suggestionTitle: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: COLORS.text.primary,
+  },
+  suggestionReasoning: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    fontStyle: "italic",
+    marginBottom: SPACING.md,
+  },
+  questionsList: {
+    marginBottom: SPACING.md,
+  },
+  questionItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: SPACING.sm,
+  },
+  questionBullet: {
+    fontSize: TYPOGRAPHY.fontSize.md,
+    color: COLORS.text.primary,
+    marginRight: SPACING.xs,
+    marginTop: 2,
+  },
+  questionText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.primary,
+    lineHeight: TYPOGRAPHY.fontSize.sm * TYPOGRAPHY.lineHeight.normal,
+  },
+  errorText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.error,
+    fontStyle: "italic",
+  },
 });
 
 export default SessionSetupScreen;
-
-
