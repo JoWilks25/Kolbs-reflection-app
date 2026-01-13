@@ -49,21 +49,6 @@ const TYPE_MODIFIERS: Record<PracticeAreaType, string> = {
 };
 
 /**
- * Step-specific guidance for question generation
- */
-const STEP_QUESTION_GUIDANCE: Record<2 | 3 | 4, string> = {
-  2: `Generate a question asking what actually happened during their practice session.
-       The question should focus on concrete events, actions, observations, and outcomes.
-       Reference their specific intent and practice area.`,
-  3: `Generate a question asking what they learned, noticed, or discovered.
-       The question should focus on insights, patterns, realizations, or understanding.
-       Connect to what happened in their session.`,
-  4: `Generate a question asking what they will do or try next time.
-       The question should focus on specific next steps, experiments, or adjustments.
-       Build on their learning from today's session.`,
-};
-
-/**
  * Follow-up question matrix: Tone × Type
  * From PRD Section "How AI Adapts by Practice Area Type × Coaching Tone"
  */
@@ -133,6 +118,235 @@ export const getFollowupExample = (
 };
 
 /**
+ * Get human-readable tone name
+ * Internal helper function
+ */
+const getToneName = (tone: CoachingTone): string => {
+  return tone === 1
+    ? 'Facilitative (guided discovery)'
+    : tone === 2
+      ? 'Socratic (structured inquiry)'
+      : 'Supportive (encouraging)';
+};
+
+/**
+ * Build context section of prompt
+ * Internal helper function
+ */
+const buildContextSection = (context: AIContext): string => {
+  let contextText = `Context:
+- Practice Area: ${context.practiceAreaName} (${context.practiceAreaType})
+- Today's Intent: ${context.sessionIntent}`;
+
+  if (context.previousStep4Answer) {
+    contextText += `\n- Previous Session Goal: ${context.previousStep4Answer}`;
+  }
+  if (context.currentStepAnswers?.step2) {
+    contextText += `\n- What happened: ${context.currentStepAnswers.step2.slice(0, 200)}...`;
+  }
+  if (context.currentStepAnswers?.step3) {
+    contextText += `\n- What they learned: ${context.currentStepAnswers.step3.slice(0, 200)}...`;
+  }
+
+  return contextText;
+};
+
+/**
+ * Build common rules section (shared across all steps)
+ * Internal helper function
+ */
+const buildCommonRules = (context: AIContext, toneName: string): string => {
+  return `Generate ONE coaching question that follows ALL these rules:
+1. Reference "${context.practiceAreaName}" OR "${context.sessionIntent}" directly
+2. Match ${context.practiceAreaType} practice type
+3. Use ${toneName} coaching style
+4. Be 10-25 words exactly
+5. End with a question mark
+6. Feel personalized to THIS specific session`;
+};
+
+/**
+ * Build prompt body for Step 2: What happened?
+ * Focus: Concrete events, actions, observations, outcomes
+ * Internal helper function - not exported
+ */
+const buildStep2PromptBody = (context: AIContext): string => {
+  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
+  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
+  const toneName = getToneName(context.coachingTone);
+  const contextSection = buildContextSection(context);
+  const commonRules = buildCommonRules(context, toneName);
+
+  return `You are a ${toneName} coach helping someone reflect on their practice session.
+
+${tonePrompt}
+
+${typeModifier}
+
+${contextSection}
+
+Task: Generate a question asking what actually happened during their practice session.
+The question should focus on concrete events, actions, observations, and outcomes.
+Reference their specific intent and practice area.
+
+${commonRules}
+
+GOOD question examples for "what happened":
+Practice Area: "Piano - Hands Independence"
+Intent: "Practice left-hand-only accents"
+✓ "How did your left hand respond when you tried to increase the tempo on those accents?"
+
+Practice Area: "Guitar - Left hand fingering"
+Intent: "Improve speed on G to C chord transitions"
+✓ "What happened to your left hand fingering speed during the G to C transitions?"
+
+Practice Area: "Python - Async programming"
+Intent: "Refactor callback hell to async/await"
+✓ "How did your Python code clarity change when converting callbacks to async/await patterns?"
+
+Practice Area: "1-on-1 meetings - Active listening"
+Intent: "Ask clarifying questions before offering solutions"
+✓ "What shifted in your 1-on-1 when you asked clarifying questions before problem-solving?"
+
+BAD question examples (too generic, don't reference practice area or intent):
+✗ "What happened during practice?"
+✗ "How was your session?"
+
+DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
+DO NOT ask multiple questions - generate exactly ONE question.
+DO NOT include explanations or preamble - output ONLY the question text.
+
+Generate the question now:`.trim();
+};
+
+/**
+ * Build prompt body for Step 3: What did you learn?
+ * Focus: Insights, patterns, realizations, understanding
+ * Can reference Step 2 answer
+ * Internal helper function - not exported
+ */
+const buildStep3PromptBody = (context: AIContext): string => {
+  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
+  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
+  const toneName = getToneName(context.coachingTone);
+  const contextSection = buildContextSection(context);
+  const commonRules = buildCommonRules(context, toneName);
+
+  // Step 3 can reference what happened (step 2)
+  const step2Reference = context.currentStepAnswers?.step2
+    ? `\n\nBased on what happened: "${context.currentStepAnswers.step2.slice(0, 150)}..."`
+    : '';
+
+  return `You are a ${toneName} coach helping someone reflect on their practice session.
+
+${tonePrompt}
+
+${typeModifier}
+
+${contextSection}${step2Reference}
+
+Task: Generate a question asking what they learned, noticed, or discovered.
+The question should focus on insights, patterns, realizations, or understanding.
+Connect to what happened in their session.
+
+${commonRules}
+
+GOOD question examples for "what did you learn":
+Practice Area: "Piano - Hands Independence"
+Intent: "Practice left-hand-only accents"
+✓ "What patterns are you seeing between tempo and your left-hand precision on the accents?"
+
+Practice Area: "Guitar - Left hand fingering"
+Intent: "Improve speed on G to C chord transitions"
+✓ "Which finger caused the most hesitation in your G to C chord changes?"
+
+Practice Area: "Python - Async programming"
+Intent: "Refactor callback hell to async/await"
+✓ "Which callback pattern proved hardest to refactor into async/await in Python today?"
+
+Practice Area: "1-on-1 meetings - Active listening"
+Intent: "Ask clarifying questions before offering solutions"
+✓ "How did your team member respond when you used clarifying questions in active listening?"
+
+BAD question examples (too generic, don't reference practice area or intent):
+✗ "What did you learn?"
+✗ "What insights did you gain?"
+
+DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
+DO NOT ask multiple questions - generate exactly ONE question.
+DO NOT include explanations or preamble - output ONLY the question text.
+
+Generate the question now:`.trim();
+};
+
+/**
+ * Build prompt body for Step 4: What will you do next?
+ * Focus: Specific next steps, experiments, adjustments
+ * Can reference Steps 2 and 3
+ * Internal helper function - not exported
+ */
+const buildStep4PromptBody = (context: AIContext): string => {
+  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
+  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
+  const toneName = getToneName(context.coachingTone);
+  const contextSection = buildContextSection(context);
+  const commonRules = buildCommonRules(context, toneName);
+
+  // Step 4 can reference previous steps and previous session
+  let previousContext = '';
+  if (context.currentStepAnswers?.step2) {
+    previousContext += `\n- What happened: ${context.currentStepAnswers.step2.slice(0, 150)}...`;
+  }
+  if (context.currentStepAnswers?.step3) {
+    previousContext += `\n- What they learned: ${context.currentStepAnswers.step3.slice(0, 150)}...`;
+  }
+  if (context.previousStep4Answer) {
+    previousContext += `\n- Previous session's next step: ${context.previousStep4Answer.slice(0, 150)}...`;
+  }
+
+  return `You are a ${toneName} coach helping someone reflect on their practice session.
+
+${tonePrompt}
+
+${typeModifier}
+
+${contextSection}${previousContext ? `\n\nFrom this session:` + previousContext : ''}
+
+Task: Generate a question asking what they will do or try next time.
+The question should focus on specific next steps, experiments, or adjustments.
+Build on their learning from today's session.
+
+${commonRules}
+
+GOOD question examples for "what will you do next":
+Practice Area: "Piano - Hands Independence"
+Intent: "Practice left-hand-only accents"
+✓ "What specific tempo-related change will you test in your next hands independence practice?"
+
+Practice Area: "Guitar - Left hand fingering"
+Intent: "Improve speed on G to C chord transitions"
+✓ "What specific left hand adjustment will you test for smoother G to C transitions?"
+
+Practice Area: "Python - Async programming"
+Intent: "Refactor callback hell to async/await"
+✓ "What specific async pattern will you apply to the remaining callback code?"
+
+Practice Area: "1-on-1 meetings - Active listening"
+Intent: "Ask clarifying questions before offering solutions"
+✓ "Which clarifying question technique will you practice in your next 1-on-1 meeting?"
+
+BAD question examples (too generic, don't reference practice area or intent):
+✗ "What will you do next time?"
+✗ "What's your plan?"
+
+DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
+DO NOT ask multiple questions - generate exactly ONE question.
+DO NOT include explanations or preamble - output ONLY the question text.
+
+Generate the question now:`.trim();
+};
+
+/**
  * Build a prompt for generating context-specific step questions
  * 
  * @param context - AI context with practice area, intent, and tone info
@@ -143,73 +357,14 @@ export const buildStepQuestionPrompt = (
   context: AIContext,
   step: 2 | 3 | 4,
 ): string => {
-  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
-  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
-  const stepGuidance = STEP_QUESTION_GUIDANCE[step];
-
-  const toneName = context.coachingTone === 1
-    ? 'Facilitative (guided discovery)'
-    : context.coachingTone === 2
-      ? 'Socratic (structured inquiry)'
-      : 'Supportive (encouraging)';
-
-  return `You are a ${toneName} coach helping someone reflect on their practice session.
-
-      Context:
-      - Practice Area: ${context.practiceAreaName} (${context.practiceAreaType})
-      - Today's Intent: ${context.sessionIntent}
-      ${context.previousStep4Answer ? `- Previous Session Goal: ${context.previousStep4Answer}` : ''}
-      ${context.currentStepAnswers?.step2 ? `- What happened: ${context.currentStepAnswers.step2.slice(0, 200)}...` : ''}
-      ${context.currentStepAnswers?.step3 ? `- What they learned: ${context.currentStepAnswers.step3.slice(0, 200)}...` : ''}
-      
-      Task: ${stepGuidance}
-      
-      Generate ONE coaching question that follows ALL these rules:
-      1. Reference "${context.practiceAreaName}" OR "${context.sessionIntent}" directly
-      2. Match ${context.practiceAreaType} practice type
-      3. Use ${toneName} coaching style
-      4. Be 10-25 words exactly
-      5. End with a question mark
-      6. Feel personalized to THIS specific session
-      
-      GOOD question examples (reference specific practice elements):
-      
-      Practice Area: "Piano - Hands Independence"
-      Intent: "Practice left-hand-only accents"
-      ✓ "How did your left hand respond when you tried to increase the tempo on those accents?"
-      ✓ "What patterns are you seeing between tempo and your left-hand precision on the accents?"
-      ✓ "What specific tempo-related change will you test in your next hands independence practice?"
-      
-      Practice Area: "Guitar - Left hand fingering"
-      Intent: "Improve speed on G to C chord transitions"
-      ✓ "What happened to your left hand fingering speed during the G to C transitions?"
-      ✓ "Which finger caused the most hesitation in your G to C chord changes?"
-      ✓ "What specific left hand adjustment will you test for smoother G to C transitions?"
-      
-      Practice Area: "Python - Async programming"
-      Intent: "Refactor callback hell to async/await"
-      ✓ "How did your Python code clarity change when converting callbacks to async/await patterns?"
-      ✓ "Which callback pattern proved hardest to refactor into async/await in Python today?"
-      ✓ "What specific async pattern will you apply to the remaining callback code?"
-      
-      Practice Area: "1-on-1 meetings - Active listening"
-      Intent: "Ask clarifying questions before offering solutions"
-      ✓ "What shifted in your 1-on-1 when you asked clarifying questions before problem-solving?"
-      ✓ "How did your team member respond when you used clarifying questions in active listening?"
-      ✓ "Which clarifying question technique will you practice in your next 1-on-1 meeting?"
-      
-      BAD question examples (too generic, don't reference practice area or intent):
-      ✗ "What happened during practice?"
-      ✗ "What did you learn?"
-      ✗ "How was your session?"
-      ✗ "What will you do next time?"
-      ✗ "Did you improve today?"
-      
-      DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
-      DO NOT ask multiple questions - generate exactly ONE question.
-      DO NOT include explanations or preamble - output ONLY the question text.
-      
-      Generate the question now:`.trim();
+  switch (step) {
+    case 2:
+      return buildStep2PromptBody(context);
+    case 3:
+      return buildStep3PromptBody(context);
+    case 4:
+      return buildStep4PromptBody(context);
+  }
 };
 
 
