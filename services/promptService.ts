@@ -442,23 +442,6 @@ Build on their learning from today's session.
 
 ${commonRules}
 
-GOOD question examples for "what will you do next":
-Practice Area: "Piano - Hands Independence"
-Intent: "Practice left-hand-only accents"
-✓ "What specific tempo-related change will you test in your next hands independence practice?"
-
-Practice Area: "Guitar - Left hand fingering"
-Intent: "Improve speed on G to C chord transitions"
-✓ "What specific left hand adjustment will you test for smoother G to C transitions?"
-
-Practice Area: "Python - Async programming"
-Intent: "Refactor callback hell to async/await"
-✓ "What specific async pattern will you apply to the remaining callback code?"
-
-Practice Area: "1-on-1 meetings - Active listening"
-Intent: "Ask clarifying questions before offering solutions"
-✓ "Which clarifying question technique will you practice in your next 1-on-1 meeting?"
-
 BAD question examples (too generic, don't reference practice area or intent):
 ✗ "What will you do next time?"
 ✗ "What's your plan?"
