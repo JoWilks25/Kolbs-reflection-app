@@ -80,12 +80,11 @@ export const generateStepQuestion = async (
       maxOutputTokens: 80, // Longer than placeholder (was 50) for full questions
       temperature: 0.7, // Balanced creativity
     });
-
+    // console.log('result', result)
     const latency = Date.now() - startTime;
     if (latency > LATENCY_WARNING_THRESHOLD) {
       console.warn(`AI question generation latency exceeded target: ${latency}ms`);
     }
-
     const question = result.text?.trim();
 
     // Validation: ensure it's actually a question

@@ -171,52 +171,44 @@ const buildCommonRules = (context: AIContext, toneName: string): string => {
  * Internal helper function - not exported
  */
 const buildStep2PromptBody = (context: AIContext): string => {
-  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
-  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
+  const coachingTone = TONE_SYSTEM_PROMPTS[context.coachingTone];
   const toneName = getToneName(context.coachingTone);
-  const contextSection = buildContextSection(context);
-  const commonRules = buildCommonRules(context, toneName);
 
-  return `You are a ${toneName} coach helping someone reflect on their practice session.
+  return `You are a ${toneName} coach helping users document what they did during practice. Generate a clear, grammatically correct Step 2 question that:
 
-${tonePrompt}
+  1. References their session intent naturally
+  2. Asks what they actually did (chronological steps/actions)
+  3. Adapts tone based on coaching style
+  4. Incorporates practice area context when relevant
 
-${typeModifier}
+  Context:
+  - Practice Area Name: ${context.practiceAreaName}
+  - Practice Area Type: ${context.practiceAreaType} (solo_skill / performance / interpersonal / creative)
+  - Session Intent: ${context.sessionIntent}
+  - Coaching Tone: ${coachingTone} (1=Facilitative / 2=Socratic / 3=Supportive)
 
-${contextSection}
+  Rules:
+  - Keep the question under 30 words
+  - Make it sound natural, not formulaic
+  - Focus on ACTIONS taken, not feelings
+  - Encourage chronological detail or steps
+  - The intent should flow grammatically into the question
 
-Task: Generate a question asking what actually happened during their practice session.
-The question should focus on concrete events, actions, observations, and outcomes.
-Reference their specific intent and practice area.
+  OUTPUT FORMAT:
+  - Return ONLY the question text, no quotes, no explanation
+  - The question must end with a question mark (?)
+  - Do NOT wrap the output in quotes or any other characters
+  - Example output: You set out to practice left-hand independence. Walk me through what you actually did—what steps did you take?
 
-${commonRules}
+  Examples of good questions (shown without quotes for clarity):
 
-GOOD question examples for "what happened":
-Practice Area: "Piano - Hands Independence"
-Intent: "Practice left-hand-only accents"
-✓ "How did your left hand respond when you tried to increase the tempo on those accents?"
+  You set out to practice left-hand independence. Walk me through what you actually did—what steps did you take?
 
-Practice Area: "Guitar - Left hand fingering"
-Intent: "Improve speed on G to C chord transitions"
-✓ "What happened to your left hand fingering speed during the G to C transitions?"
+  Your goal was to deliver your opening without notes. What did you do step-by-step during this practice? What actually happened?
 
-Practice Area: "Python - Async programming"
-Intent: "Refactor callback hell to async/await"
-✓ "How did your Python code clarity change when converting callbacks to async/await patterns?"
+  You wanted to give constructive feedback to Sarah. What did you do during this conversation? Take me through how it unfolded.
 
-Practice Area: "1-on-1 meetings - Active listening"
-Intent: "Ask clarifying questions before offering solutions"
-✓ "What shifted in your 1-on-1 when you asked clarifying questions before problem-solving?"
-
-BAD question examples (too generic, don't reference practice area or intent):
-✗ "What happened during practice?"
-✗ "How was your session?"
-
-DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
-DO NOT ask multiple questions - generate exactly ONE question.
-DO NOT include explanations or preamble - output ONLY the question text.
-
-Generate the question now:`.trim();
+  Now generate the question (output only the question text, no quotes):`.trim();
 };
 
 /**
@@ -275,6 +267,11 @@ BAD question examples (too generic, don't reference practice area or intent):
 DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
 DO NOT ask multiple questions - generate exactly ONE question.
 DO NOT include explanations or preamble - output ONLY the question text.
+
+OUTPUT FORMAT:
+- Return ONLY the question text, no quotes, no explanation
+- The question must end with a question mark (?)
+- Do NOT wrap the output in quotes or any other characters
 
 Generate the question now:`.trim();
 };
@@ -342,6 +339,11 @@ BAD question examples (too generic, don't reference practice area or intent):
 DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
 DO NOT ask multiple questions - generate exactly ONE question.
 DO NOT include explanations or preamble - output ONLY the question text.
+
+OUTPUT FORMAT:
+- Return ONLY the question text, no quotes, no explanation
+- The question must end with a question mark (?)
+- Do NOT wrap the output in quotes or any other characters
 
 Generate the question now:`.trim();
 };
