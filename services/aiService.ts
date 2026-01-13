@@ -152,7 +152,7 @@ export const generateFollowup = async (
   userAnswer: string,
 ): Promise<string | null> => {
   // Only generate follow-up if answer is brief
-  if (userAnswer.length >= 50) {
+  if (userAnswer.length >= 150) {
     return null;
   }
 
