@@ -173,7 +173,14 @@ export const useAICoaching = (
     fetchQuestion();
     // Only regenerate when step changes or AI becomes active
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, aiActive, reflectionDraft.coachingTone]);
+  }, [step, aiActive, reflectionDraft.coachingTone, currentSession]);
+
+  /**
+   * Clear follow-up when step changes
+   */
+  useEffect(() => {
+    setFollowup(null);
+  }, [step]);
 
   /**
    * Check if a follow-up question should be generated based on answer length
@@ -186,8 +193,8 @@ export const useAICoaching = (
       return;
     }
 
-    // Only show follow-up for brief answers (< 50 chars)
-    if (userAnswer.length >= 50 || userAnswer.length === 0) {
+    // Only show follow-up for brief answers (< 150 chars)
+    if (userAnswer.length >= 150 || userAnswer.length === 0) {
       return;
     }
 
@@ -213,7 +220,7 @@ export const useAICoaching = (
   const markFollowupAnswered = useCallback(() => {
     if (followup) {
       incrementAiMetric('aiFollowupsAnswered');
-      setFollowup(null); // Clear after answered
+      // Don't clear followup - persists until step change
     }
   }, [followup, incrementAiMetric]);
 

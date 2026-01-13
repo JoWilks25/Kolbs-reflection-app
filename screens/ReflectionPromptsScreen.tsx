@@ -111,9 +111,9 @@ const ReflectionPromptsScreen: React.FC = () => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [draftFields, setDraftFields] = useState<Set<string>>(new Set());
+  const [followupShownAtLength, setFollowupShownAtLength] = useState(0);
 
   const inputRef = useRef<TextInput>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get current step (2, 3, or 4) from index
   const currentStep: 2 | 3 | 4 = (currentStepIndex + 2) as 2 | 3 | 4;
@@ -194,7 +194,7 @@ const ReflectionPromptsScreen: React.FC = () => {
           });
         }
         setSessionIntent(session.intent);
-        
+
         // Set session in store for AI hook to access (even though it's ended)
         setCurrentSession(session);
 
@@ -324,7 +324,7 @@ const ReflectionPromptsScreen: React.FC = () => {
           });
         }
         setSessionIntent(session.intent);
-        
+
         // Set session in store for AI hook to access (even though it's ended)
         setCurrentSession(session);
 
@@ -415,6 +415,11 @@ const ReflectionPromptsScreen: React.FC = () => {
     return () => subscription.remove();
   }, [currentSessionId, reflectionDraft]);
 
+  // Clear follow-up tracking when step changes
+  useEffect(() => {
+    setFollowupShownAtLength(0);
+  }, [currentStepIndex]);
+
   // Get current step field name
   const getCurrentField = (): "step2" | "step3" | "step4" => {
     const fields: Array<"step2" | "step3" | "step4"> = ["step2", "step3", "step4"];
@@ -445,8 +450,8 @@ const ReflectionPromptsScreen: React.FC = () => {
     }
   };
 
-  // Handle blur - trigger debounced save and check for follow-up
-  const handleBlur = async () => {
+  // Handle blur - trigger debounced save
+  const handleBlur = () => {
     if (currentSessionId) {
       debouncedSave(currentSessionId, {
         coachingTone: reflectionDraft.coachingTone,
@@ -454,10 +459,6 @@ const ReflectionPromptsScreen: React.FC = () => {
         step3: reflectionDraft.step3,
         step4: reflectionDraft.step4,
       });
-    }
-    // Check for follow-up question if AI is active
-    if (aiActive) {
-      await checkForFollowup(getCurrentValue());
     }
   };
 
@@ -470,7 +471,33 @@ const ReflectionPromptsScreen: React.FC = () => {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    const currentValue = getCurrentValue();
+
+    // If follow-up is already showing (second Next press)
+    if (followup) {
+      // Track if user increased answer length
+      const lengthIncreased = currentValue.length > followupShownAtLength + 20;
+      if (lengthIncreased) {
+        markFollowupAnswered();
+      }
+      // Advance regardless (user chose to move on)
+      if (currentStepIndex < 2) {
+        setCurrentStepIndex(currentStepIndex + 1);
+      }
+      return;
+    }
+
+    // First Next press - check if answer is brief
+    if (currentValue.length < 150 && currentValue.length > 0 && aiActive) {
+      // Generate follow-up and stay on current step
+      await checkForFollowup(currentValue);
+      // Track initial answer length for comparison
+      setFollowupShownAtLength(currentValue.length);
+      return;
+    }
+
+    // Answer is long enough or AI not active - advance
     if (currentStepIndex < 2) {
       setCurrentStepIndex(currentStepIndex + 1);
     }
@@ -589,28 +616,16 @@ const ReflectionPromptsScreen: React.FC = () => {
               </Text>
             </View>
           )}
-          {/* Follow-up question (when AI is active and answer is brief) */}
-          {aiActive && followup && getCurrentValue().length > 0 && getCurrentValue().length < 50 && (
-            <View style={styles.followupContainer}>
-              <Text style={styles.followupLabel}>To go deeper:</Text>
-              <Text style={styles.followupQuestion}>{followup}</Text>
-              <TextInput
-                style={styles.followupInput}
-                placeholder="Add more detail..."
-                placeholderTextColor={COLORS.text.disabled}
-                onChangeText={(text) => {
-                  if (text.length > 0) {
-                    markFollowupAnswered();
-                    const currentValue = getCurrentValue();
-                    updateReflectionDraft(getCurrentField(), `${currentValue} ${text}`);
-                  }
-                }}
-                multiline
-              />
-            </View>
-          )}
         </View>
       </ScrollView>
+
+      {/* Follow-up card - appears above navigation buttons */}
+      {aiActive && followup && (
+        <View style={styles.followupContainer}>
+          <Text style={styles.followupLabel}>To go deeper:</Text>
+          <Text style={styles.followupQuestion}>{followup}</Text>
+        </View>
+      )}
 
       {/* Navigation Buttons */}
       <View style={styles.buttonContainer}>
@@ -763,38 +778,35 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   followupContainer: {
-    marginTop: SPACING.md,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
     padding: SPACING.md,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.warning + "15",
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.neutral[200],
+    borderWidth: 2,
+    borderColor: COLORS.warning,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   followupLabel: {
-    fontSize: TYPOGRAPHY.fontSize.xs,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    color: COLORS.text.secondary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: COLORS.warning,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   followupQuestion: {
     fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: COLORS.text.primary,
-    marginBottom: SPACING.sm,
-    lineHeight: TYPOGRAPHY.fontSize.md * TYPOGRAPHY.lineHeight.normal,
-  },
-  followupInput: {
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    padding: SPACING.sm,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.text.primary,
-    borderWidth: 1,
-    borderColor: COLORS.neutral[200],
-    minHeight: 60,
-    textAlignVertical: "top",
+    lineHeight: TYPOGRAPHY.fontSize.md * TYPOGRAPHY.lineHeight.relaxed,
   },
   inputSection: {
     marginBottom: SPACING.md,

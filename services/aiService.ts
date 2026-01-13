@@ -12,7 +12,7 @@
 import { apple } from '@react-native-ai/apple';
 import { generateText } from 'ai';
 import { Platform } from 'react-native';
-import { buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, type AIContext } from './promptService';
+import { buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, getStep2FollowupNudge, type AIContext } from './promptService';
 import type { CoachingTone, PracticeAreaType } from '../utils/types';
 import { TONE_PROMPTS } from '../utils/constants';
 
@@ -80,12 +80,11 @@ export const generateStepQuestion = async (
       maxOutputTokens: 80, // Longer than placeholder (was 50) for full questions
       temperature: 0.7, // Balanced creativity
     });
-
+    // console.log('result', result)
     const latency = Date.now() - startTime;
     if (latency > LATENCY_WARNING_THRESHOLD) {
       console.warn(`AI question generation latency exceeded target: ${latency}ms`);
     }
-
     const question = result.text?.trim();
 
     // Validation: ensure it's actually a question
@@ -152,10 +151,16 @@ export const generateFollowup = async (
   userAnswer: string,
 ): Promise<string | null> => {
   // Only generate follow-up if answer is brief
-  if (userAnswer.length >= 50) {
+  if (userAnswer.length >= 150) {
     return null;
   }
 
+  // For step 2, use tone-adapted nudge instead of AI generation
+  if (step === 2) {
+    return getStep2FollowupNudge(context.coachingTone, userAnswer.length);
+  }
+
+  // For steps 3 and 4, use AI generation
   const prompt = buildFollowupPrompt(context, step, userAnswer);
 
   try {
