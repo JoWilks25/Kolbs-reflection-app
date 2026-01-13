@@ -242,62 +242,57 @@ const buildStep2PromptBody = (context: AIContext): string => {
  * Internal helper function - not exported
  */
 const buildStep3PromptBody = (context: AIContext): string => {
-  const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
-  const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
+  const coachingTone = TONE_SYSTEM_PROMPTS[context.coachingTone];
   const toneName = getToneName(context.coachingTone);
-  const contextSection = buildContextSection(context);
-  const commonRules = buildCommonRules(context, toneName);
 
-  // Step 3 can reference what happened (step 2)
-  const step2Reference = context.currentStepAnswers?.step2
-    ? `\n\nBased on what happened: "${context.currentStepAnswers.step2.slice(0, 150)}..."`
-    : '';
+  // Build context section inline
+  let contextText = `Context:
+  - Practice Area Name: ${context.practiceAreaName}
+  - Practice Area Type: ${context.practiceAreaType} (solo_skill / performance / interpersonal / creative)
+  - Session Intent: ${context.sessionIntent}
+  - Coaching Tone: ${coachingTone} (1=Facilitative / 2=Socratic / 3=Supportive)`;
 
-  return `You are a ${toneName} coach helping someone reflect on their practice session.
+  if (context.previousStep4Answer) {
+    contextText += `\n  - Previous Session Goal: ${context.previousStep4Answer.slice(0, 150)}...`;
+  }
+  if (context.currentStepAnswers?.step2) {
+    contextText += `\n  - What happened: ${context.currentStepAnswers.step2.slice(0, 150)}...`;
+  }
 
-${tonePrompt}
+  return `You are a ${toneName} coach helping users reflect on what they learned during practice. Generate a clear, grammatically correct Step 3 question that:
 
-${typeModifier}
+  1. References their session intent naturally
+  2. Asks what they learned, noticed, or discovered (insights, patterns, realizations)
+  3. Adapts tone based on coaching style
+  4. Incorporates practice area context when relevant
+  5. Connects to what happened in their session
 
-${contextSection}${step2Reference}
+  ${contextText}
 
-Task: Generate a question asking what they learned, noticed, or discovered.
-The question should focus on insights, patterns, realizations, or understanding.
-Connect to what happened in their session.
+  Rules:
+  - Keep the question under 30 words
+  - Make it sound natural, not formulaic
+  - Focus on INSIGHTS and LEARNING, not just actions
+  - Encourage reflection on patterns or realizations
+  - The intent should flow grammatically into the question
 
-${commonRules}
+  OUTPUT FORMAT:
+  - Return ONLY the question text, no quotes, no explanation
+  - The question must end with a question mark (?)
+  - Do NOT wrap the output in quotes or any other characters
+  - Example output: What patterns are you seeing between tempo and your left-hand precision on the accents?
 
-GOOD question examples for "what did you learn":
-Practice Area: "Piano - Hands Independence"
-Intent: "Practice left-hand-only accents"
-✓ "What patterns are you seeing between tempo and your left-hand precision on the accents?"
+  Examples of good questions (shown without quotes for clarity):
 
-Practice Area: "Guitar - Left hand fingering"
-Intent: "Improve speed on G to C chord transitions"
-✓ "Which finger caused the most hesitation in your G to C chord changes?"
+  What patterns are you seeing between tempo and your left-hand precision on the accents?
 
-Practice Area: "Python - Async programming"
-Intent: "Refactor callback hell to async/await"
-✓ "Which callback pattern proved hardest to refactor into async/await in Python today?"
+  Which finger caused the most hesitation in your G to C chord changes?
 
-Practice Area: "1-on-1 meetings - Active listening"
-Intent: "Ask clarifying questions before offering solutions"
-✓ "How did your team member respond when you used clarifying questions in active listening?"
+  Which callback pattern proved hardest to refactor into async/await in Python today?
 
-BAD question examples (too generic, don't reference practice area or intent):
-✗ "What did you learn?"
-✗ "What insights did you gain?"
+  How did your team member respond when you used clarifying questions in active listening?
 
-DO NOT use generic phrases like "your practice" or "your session" - always use the specific practice area name or intent details.
-DO NOT ask multiple questions - generate exactly ONE question.
-DO NOT include explanations or preamble - output ONLY the question text.
-
-OUTPUT FORMAT:
-- Return ONLY the question text, no quotes, no explanation
-- The question must end with a question mark (?)
-- Do NOT wrap the output in quotes or any other characters
-
-Generate the question now:`.trim();
+  Now generate the question (output only the question text, no quotes):`.trim();
 };
 
 /**

@@ -87,17 +87,20 @@ export const APP_CONSTANTS = {
 // Keys: 1 = Facilitative, 2 = Socratic, 3 = Supportive
 export const TONE_PROMPTS: Record<1 | 2 | 3, { step2: string; step3: string; step4: string }> = {
   1: { // Facilitative - Guided Discovery
-    step2: "What happened during this practice? Which moments stood out to you most?",
-    step3: "What are you noticing about yourself or your approach? Looking back, what worked and what didn't?",
+    // Self-directed, exploratory, open-ended
+    step2: "Walk me through what happened during this practice. What steps did you take?",
+    step3: "What are you noticing about yourself or your approach? What's emerging for you?",
     step4: "What do you feel ready to explore or try next time?",
   },
   2: { // Socratic - Structured Inquiry
-    step2: "What actually happened, step by step? What was different from what you expected?",
-    step3: "What patterns are you seeing? What assumptions did you have going in?",
+    // Systematic, evidence-based, analytical
+    step2: "What actually happened, step by step? Describe the sequence of actions you took.",
+    step3: "Looking back, what patterns are you seeing? What assumptions did you start with?",
     step4: "What specific change will you test in your next session?",
   },
   3: { // Supportive - Encouraging
-    step2: "What happened in this session? What parts felt most challenging or successful?",
+    // Warm, normalizing, confidence-building
+    step2: "You practiced—that's great! What happened during this session? Walk me through your steps.",
     step3: "What's the main thing you're taking away from this? What felt like progress?",
     step4: "What's one small thing you'll focus on next time?",
   },
