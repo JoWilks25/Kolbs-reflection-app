@@ -173,7 +173,7 @@ export const useAICoaching = (
     fetchQuestion();
     // Only regenerate when step changes or AI becomes active
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, aiActive, reflectionDraft.coachingTone]);
+  }, [step, aiActive, reflectionDraft.coachingTone, currentSession]);
 
   /**
    * Clear follow-up when step changes

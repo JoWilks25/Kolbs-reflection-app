@@ -114,7 +114,6 @@ const ReflectionPromptsScreen: React.FC = () => {
   const [followupShownAtLength, setFollowupShownAtLength] = useState(0);
 
   const inputRef = useRef<TextInput>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get current step (2, 3, or 4) from index
   const currentStep: 2 | 3 | 4 = (currentStepIndex + 2) as 2 | 3 | 4;
