@@ -73,7 +73,7 @@ export const useAICoaching = (
    * Build context object for AI generation
    */
   const buildContext = useCallback((): AIContext | null => {
-    console.log({ currentPracticeArea, currentSession, reflectionDraft })
+    // console.log({ currentPracticeArea, currentSession, reflectionDraft })
     if (!currentPracticeArea || !currentSession || !reflectionDraft.coachingTone) {
       return null;
     }

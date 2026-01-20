@@ -71,7 +71,7 @@ export const generateStepQuestion = async (
   step: 2 | 3 | 4,
 ): Promise<string | null> => {
   const prompt = buildStepQuestionPrompt(context, step);
-
+  console.log('generateStepQuestion: prompt', prompt)
   try {
     const startTime = Date.now();
     const result = await generateText({
@@ -168,11 +168,11 @@ export const generateFollowup = async (
 
   // For steps 3 and 4, try AI generation with hardcoded fallback
   const prompt = buildFollowupPrompt(context, step, userAnswer);
-
+  let result;
   try {
     const startTime = Date.now();
 
-    const result = await generateText({
+    result = await generateText({
       model: apple() as any, // Type assertion to work around dependency version mismatch
       prompt,
       maxOutputTokens: 100, // Changed from maxTokens to maxOutputTokens
@@ -186,6 +186,15 @@ export const generateFollowup = async (
 
     return result.text?.trim() || null;
   } catch (error) {
+    if (error instanceof Error && error.message.includes('unsafe')) {
+      console.warn('Guardrail violation:', {
+        step,
+        practiceAreaType: context.practiceAreaType,
+        answerSnippet: userAnswer.substring(0, 50), // First 50 chars only
+        tone: context.coachingTone
+      });
+      return getHardcodedFollowup(context, step, userAnswer.length);
+    }
     console.error('Follow-up generation failed:', error);
     // Fallback to hardcoded follow-up when AI fails
     return getHardcodedFollowup(context, step, userAnswer.length);
