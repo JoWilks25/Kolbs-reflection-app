@@ -7,12 +7,14 @@
  * v2.0 Changes:
  * - Added 'type' column to practice_areas (solo_skill, performance, interpersonal, creative)
  * - Renamed 'format' to 'coaching_tone' in reflections (1=Facilitative, 2=Socratic, 3=Supportive)
- * - Added AI assistance fields: ai_assisted, ai_placeholders_shown, ai_followups_shown, ai_followups_answered
+ * - Added AI assistance fields: ai_assisted, ai_questions_shown, ai_followups_shown, ai_followups_answered
  * - Added index for AI analytics queries
  * 
  * v2.1 Changes:
- * - Added ai_questions_shown field (replaces ai_placeholders_shown for new reflections)
  * - Added step2_question, step3_question, step4_question fields to track actual generated questions
+ * 
+ * v2.3 Changes:
+ * - Removed ai_placeholders_shown field (deprecated, replaced by ai_questions_shown)
  */
 
 export const SCHEMA_SQL = `
@@ -56,8 +58,7 @@ CREATE TABLE IF NOT EXISTS reflections (
   step4_answer TEXT NOT NULL,            -- "Next action"
   
   -- AI interaction metrics (NEW in v2.0)
-  ai_placeholders_shown INTEGER DEFAULT 0,  -- DEPRECATED: kept for backward compatibility
-  ai_questions_shown INTEGER DEFAULT 0,      -- NEW in v2.1: Count of AI-generated questions shown
+  ai_questions_shown INTEGER DEFAULT 0,      -- Count of AI-generated questions shown
   ai_followups_shown INTEGER DEFAULT 0,
   ai_followups_answered INTEGER DEFAULT 0,
   

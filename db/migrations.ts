@@ -137,6 +137,61 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
         throw error; // Re-throw to prevent silent failures
       }
     }
+
+    // Migration v2.3: Remove deprecated ai_placeholders_shown column
+    if (columnNames.includes('ai_placeholders_shown')) {
+      console.log('Running migration v2.3: Removing deprecated ai_placeholders_shown column...');
+      try {
+        // SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
+        // This is safe because ai_placeholders_shown was deprecated and replaced by ai_questions_shown
+        await db.execAsync(`
+          -- Create new table without ai_placeholders_shown
+          CREATE TABLE reflections_v2_3 (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL UNIQUE,
+            coaching_tone INTEGER NOT NULL,
+            ai_assisted INTEGER NOT NULL DEFAULT 1,
+            step2_answer TEXT NOT NULL,
+            step3_answer TEXT NOT NULL,
+            step4_answer TEXT NOT NULL,
+            ai_questions_shown INTEGER DEFAULT 0,
+            ai_followups_shown INTEGER DEFAULT 0,
+            ai_followups_answered INTEGER DEFAULT 0,
+            step2_question TEXT,
+            step3_question TEXT,
+            step4_question TEXT,
+            feedback_rating INTEGER,
+            feedback_note TEXT,
+            completed_at INTEGER NOT NULL,
+            updated_at INTEGER,
+            FOREIGN KEY (session_id) REFERENCES sessions(id)
+          );
+          
+          -- Copy data (excluding ai_placeholders_shown)
+          INSERT INTO reflections_v2_3 
+          SELECT 
+            id, session_id, coaching_tone, ai_assisted,
+            step2_answer, step3_answer, step4_answer,
+            ai_questions_shown, ai_followups_shown, ai_followups_answered,
+            step2_question, step3_question, step4_question,
+            feedback_rating, feedback_note,
+            completed_at, updated_at
+          FROM reflections;
+          
+          -- Drop old table and rename
+          DROP TABLE reflections;
+          ALTER TABLE reflections_v2_3 RENAME TO reflections;
+          
+          -- Recreate indexes
+          CREATE INDEX IF NOT EXISTS idx_reflections_session ON reflections (session_id);
+          CREATE INDEX IF NOT EXISTS idx_reflections_ai_assisted ON reflections (ai_assisted, coaching_tone);
+        `);
+        console.log('Migration v2.3 completed: ai_placeholders_shown column removed');
+      } catch (error) {
+        console.error('Error removing ai_placeholders_shown column:', error);
+        throw error; // Re-throw to prevent silent failures
+      }
+    }
   } catch (error) {
     console.error('Error running migrations:', error);
     // Re-throw to ensure migration failures are visible

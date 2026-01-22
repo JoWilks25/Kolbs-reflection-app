@@ -72,7 +72,6 @@ export async function exportData(): Promise<void> {
             coaching_tone: session.coaching_tone,
             coaching_tone_name: coachingToneNames[session.coaching_tone] || 'Unknown',
             ai_assisted: session.ai_assisted === 1,
-            ai_placeholders_shown: session.ai_placeholders_shown || 0,
             ai_questions_shown: session.ai_questions_shown || 0,
             ai_followups_shown: session.ai_followups_shown || 0,
             ai_followups_answered: session.ai_followups_answered || 0,

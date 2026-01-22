@@ -10,12 +10,12 @@ _Version: 2.0 (AI-Assisted Coaching Redesign)_
 **Platform:** React Native with Expo (managed workflow), iOS-only MVP
 **Minimum iOS:** iOS 26+ for AI features (graceful degradation for older devices)
 **Developer:** Senior full-stack engineer with React/Node.js expertise, prior React Native + Expo experience[^1]
-**Core Focus:** Privacy-first, local-only reflection app with AI-assisted coaching using Apple Foundation Models for context-aware prompts and adaptive follow-ups[^2]
+**Core Focus:** Privacy-first, local-only reflection app with AI-assisted coaching using Apple Foundation Models for context-aware question generation and adaptive follow-ups[^2]
 
 ### What's New in v2.0
 
 - **AI-Assisted Coaching:** Replaces fixed reflection formats with 3 coaching tones (Facilitative, Socratic, Supportive)
-- **On-Device LLM:** Apple Foundation Models via `react-native-ai` for context-aware placeholders and adaptive follow-ups
+- **On-Device LLM:** Apple Foundation Models via `react-native-ai` for context-aware question generation and adaptive follow-ups
 - **Practice Area Types:** User-selected classification (solo_skill, performance, interpersonal, creative) for AI adaptation
 - **Per-Session AI Toggle:** Users can enable/disable AI assistance for each reflection (default: ON)
 - **Graceful Degradation:** Full functionality on older devices, AI features hidden when unavailable
@@ -33,7 +33,7 @@ _Version: 2.0 (AI-Assisted Coaching Redesign)_
 - ✅ Sequential session linking with strict enforcement
 - ✅ Timer with optional target duration (15/30/45/60 min presets + notifications)
 - ✅ **3 coaching tones (Facilitative, Socratic, Supportive)** replacing fixed formats
-- ✅ **AI-generated placeholder starters** based on Practice Area, intent, and previous session
+- ✅ **AI-generated step questions** based on Practice Area, intent, and previous session
 - ✅ **Adaptive follow-up questions** (max 1-2 per step) based on answer length and Practice Area type
 - ✅ **Per-session AI toggle** (default ON for supported devices)
 - ✅ 24h/48h reflection deadlines with "Reflect Later" option
@@ -155,9 +155,9 @@ App.tsx
                ┌───────────────┴───────────────┐
                ▼                               ▼
 ┌──────────────────────────┐    ┌──────────────────────────┐
-│   Placeholder Starters   │    │   Follow-up Questions    │
-│   "I focused on..."      │    │   "What assumptions did  │
-│   "The main challenge.." │    │    you have going in?"   │
+│   Step Questions         │    │   Follow-up Questions    │
+│   "You set out to..."    │    │   "What assumptions did  │
+│   "What actually..."     │    │    you have going in?"   │
 └──────────────────────────┘    └──────────────────────────┘
 ```
 
@@ -197,10 +197,10 @@ export const useAppStore = create((set, get) => ({
     step2: '',
     step3: '',
     step4: '',
-    // AI interaction tracking (NEW)
-    aiPlaceholdersShown: 0,
-    aiFollowupsShown: 0,
-    aiFollowupsAnswered: 0,
+  // AI interaction tracking (NEW)
+  aiQuestionsShown: 0,
+  aiFollowupsShown: 0,
+  aiFollowupsAnswered: 0,
     feedbackRating: null,
     feedbackNote: '',
   },
@@ -317,12 +317,12 @@ const {
   incrementAiMetric,
 } = useAppStore();
 
-// Track when AI placeholder is shown
-useEffect(() => {
-  if (aiPlaceholder) {
-    incrementAiMetric('aiPlaceholdersShown');
-  }
-}, [aiPlaceholder]);
+  // Track when AI question is shown
+  useEffect(() => {
+    if (stepQuestion) {
+      incrementAiMetric('aiQuestionsShown');
+    }
+  }, [stepQuestion]);
 ```
 
 ***
@@ -365,7 +365,7 @@ CREATE TABLE IF NOT EXISTS reflections (
   step3_answer TEXT NOT NULL,
   step4_answer TEXT NOT NULL,
   -- AI interaction metrics (NEW)
-  ai_placeholders_shown INTEGER DEFAULT 0,
+  ai_questions_shown INTEGER DEFAULT 0,
   ai_followups_shown INTEGER DEFAULT 0,
   ai_followups_answered INTEGER DEFAULT 0,
   -- Feedback
@@ -441,7 +441,7 @@ export const migrations = [
           format as coaching_tone,  -- Map old format values to coaching_tone
           0 as ai_assisted,         -- Old reflections were not AI-assisted
           step2_answer, step3_answer, step4_answer,
-          0, 0, 0,                   -- No AI metrics for old data
+          0, 0, 0,                   -- No AI metrics for old data (ai_questions_shown, ai_followups_shown, ai_followups_answered)
           feedback_rating, feedback_note,
           completed_at, updated_at
         FROM reflections;
@@ -549,30 +549,30 @@ export const initializeAI = async () => {
   return apple;
 };
 
-// Generate placeholder starter for a Kolb step
-export const generatePlaceholder = async (
+// Generate context-specific question for a Kolb step
+export const generateStepQuestion = async (
   context: AIContext,
   step: 2 | 3 | 4,
 ): Promise<string | null> => {
   const apple = createApple();
-  const prompt = buildPlaceholderPrompt(context, step);
+  const prompt = buildStepQuestionPrompt(context, step);
   
   try {
     const startTime = Date.now();
     const response = await apple.generate({
       prompt,
-      maxTokens: 50, // Short placeholder
+      maxTokens: 80, // Full question
       temperature: 0.7,
     });
     
     const latency = Date.now() - startTime;
     if (latency > 2000) {
-      console.warn(`AI placeholder latency exceeded target: ${latency}ms`);
+      console.warn(`AI question generation latency exceeded target: ${latency}ms`);
     }
     
     return response.text;
   } catch (error) {
-    console.error('Placeholder generation failed:', error);
+    console.error('Question generation failed:', error);
     return null;
   }
 };
@@ -651,18 +651,19 @@ const TYPE_MODIFIERS: Record<PracticeAreaType, string> = {
   creative: `Encourage divergent thinking and embrace uncertainty. Explore where ideas came from and what surprised the user.`,
 };
 
-// Build placeholder prompt
-export const buildPlaceholderPrompt = (
+// Build step question prompt
+export const buildStepQuestionPrompt = (
   context: AIContext,
   step: 2 | 3 | 4,
 ): string => {
   const tonePrompt = TONE_SYSTEM_PROMPTS[context.coachingTone];
   const typeModifier = TYPE_MODIFIERS[context.practiceAreaType];
   
+  // Step-specific instructions for full questions
   const stepInstructions = {
-    2: `Generate a brief placeholder starter (3-6 words) for describing what happened during practice. Example: "I focused on..." or "The main challenge was..."`,
-    3: `Generate a brief placeholder starter (3-6 words) for identifying a lesson or pattern. Example: "I noticed that..." or "The key insight was..."`,
-    4: `Generate a brief placeholder starter (3-6 words) for planning next steps. Example: "Next time I will..." or "I want to try..."`,
+    2: `Generate a question asking what happened during practice. Reference the session intent naturally.`,
+    3: `Generate a question asking what they learned or noticed. Reference their session intent and what happened.`,
+    4: `Generate a question asking what they will do next. Reference their learning from today's session.`,
   };
   
   return `${tonePrompt}
@@ -676,7 +677,7 @@ ${context.previousStep4Answer ? `- Previous Session Goal: ${context.previousStep
 
 ${stepInstructions[step]}
 
-Respond with ONLY the placeholder text, nothing else.`;
+Respond with ONLY the question text, nothing else.`;
 };
 
 // Build follow-up question prompt
@@ -762,7 +763,7 @@ export const useAICoaching = (step: 2 | 3 | 4) => {
     incrementAiMetric,
   } = useAppStore();
   
-  const [placeholder, setPlaceholder] = useState<string | null>(null);
+  const [stepQuestion, setStepQuestion] = useState<string | null>(null);
   const [followup, setFollowup] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -785,9 +786,9 @@ export const useAICoaching = (step: 2 | 3 | 4) => {
     };
   }, [currentPracticeArea, currentSession, reflectionDraft]);
   
-  // Generate placeholder on mount
+  // Generate step question on mount
   useEffect(() => {
-    const fetchPlaceholder = async () => {
+    const fetchQuestion = async () => {
       if (!aiAvailable || !aiEnabled || !reflectionDraft.aiAssisted) {
         return;
       }
@@ -796,16 +797,16 @@ export const useAICoaching = (step: 2 | 3 | 4) => {
       if (!context) return;
       
       setIsLoading(true);
-      const result = await generatePlaceholder(context, step);
-      setPlaceholder(result);
+      const result = await generateStepQuestion(context, step);
+      setStepQuestion(result);
       
       if (result) {
-        incrementAiMetric('aiPlaceholdersShown');
+        incrementAiMetric('aiQuestionsShown');
       }
       setIsLoading(false);
     };
     
-    fetchPlaceholder();
+    fetchQuestion();
   }, [step, aiAvailable, aiEnabled]);
   
   // Generate follow-up when user's answer is brief
@@ -839,7 +840,7 @@ export const useAICoaching = (step: 2 | 3 | 4) => {
   }, [followup]);
   
   return {
-    placeholder,
+    stepQuestion,
     followup,
     isLoading,
     checkForFollowup,
@@ -1101,14 +1102,14 @@ const handleContinue = () => {
 **Purpose:** Step-by-step prompts with tone-adapted wording, AI placeholders, and follow-ups
 
 **Modes:**
-- **New Reflection:** Empty fields, AI placeholders shown
+- **New Reflection:** Empty fields, AI-generated questions shown
 - **Edit Reflection:** Pre-filled fields, no AI (editing existing content)
 
 **UI Components:**
 
 ```tsx
 const { 
-  placeholder, 
+  stepQuestion, 
   followup, 
   isLoading, 
   checkForFollowup,
@@ -1121,19 +1122,10 @@ return (
     {/* Progress indicator */}
     <Text style={styles.progress}>Step {currentStep - 1} of 3</Text>
     
-    {/* Prompt text (tone-adapted) */}
-    <Text style={styles.prompt}>{getPromptForTone(coachingTone, currentStep)}</Text>
-    
-    {/* AI Placeholder (if available and text is empty) */}
-    {aiActive && placeholder && !currentValue && (
-      <TouchableOpacity 
-        style={styles.placeholderChip}
-        onPress={() => setCurrentValue(placeholder)}
-      >
-        <Text style={styles.placeholderText}>{placeholder}</Text>
-        <Text style={styles.tapToUse}>Tap to use</Text>
-      </TouchableOpacity>
-    )}
+    {/* Prompt text (AI-generated or tone-adapted) */}
+    <Text style={styles.prompt}>
+      {aiActive && stepQuestion ? stepQuestion : getPromptForTone(coachingTone, currentStep)}
+    </Text>
     
     {/* Main text input */}
     <TextInput
@@ -1144,7 +1136,7 @@ return (
         handleBlur();
         checkForFollowup(currentValue);
       }}
-      placeholder={aiActive ? '' : getBasePlaceholder(currentStep)}
+      placeholder="Type or use voice input..."
       multiline
       autoFocus
     />
@@ -1293,7 +1285,7 @@ const handleFinish = async () => {
     step2_answer: reflectionDraft.step2,
     step3_answer: reflectionDraft.step3,
     step4_answer: reflectionDraft.step4,
-    ai_placeholders_shown: reflectionDraft.aiPlaceholdersShown,  // NEW
+    ai_questions_shown: reflectionDraft.aiQuestionsShown,  // NEW
     ai_followups_shown: reflectionDraft.aiFollowupsShown,  // NEW
     ai_followups_answered: reflectionDraft.aiFollowupsAnswered,  // NEW
     feedback_rating: selectedRating,
@@ -1306,7 +1298,7 @@ const handleFinish = async () => {
     INSERT INTO reflections (
       id, session_id, coaching_tone, ai_assisted,
       step2_answer, step3_answer, step4_answer,
-      ai_placeholders_shown, ai_followups_shown, ai_followups_answered,
+      ai_questions_shown, ai_followups_shown, ai_followups_answered,
       feedback_rating, feedback_note, completed_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [/* values */]);
@@ -1505,7 +1497,7 @@ const exportData = async () => {
             coaching_tone_name: getCoachingToneName(s.coaching_tone),
             ai_assisted: s.ai_assisted === 1,
             ai_metrics: {
-              placeholders_shown: s.ai_placeholders_shown || 0,
+              questions_shown: s.ai_questions_shown || 0,
               followups_shown: s.ai_followups_shown || 0,
               followups_answered: s.ai_followups_answered || 0,
             },
@@ -1656,12 +1648,11 @@ const db = SQLite.openDatabaseSync('kolbs_app.db', {
 - ✅ On iOS 26+ without Apple Intelligence: AI toggle hidden, `ai_assisted = 0`
 - ✅ On iOS <26: AI toggle hidden, `ai_assisted = 0`
 
-**AI Placeholders:**
-- ✅ Placeholder appears when input is empty and AI is enabled
-- ✅ Placeholder disappears after user starts typing
-- ✅ Tapping placeholder inserts text into input
-- ✅ Placeholder generation completes in <2 seconds
-- ✅ Failed placeholder generation doesn't break flow (graceful fallback)
+**AI Step Questions:**
+- ✅ AI-generated question appears when step loads and AI is enabled
+- ✅ Question replaces static tone-based prompt
+- ✅ Question generation completes in <2 seconds
+- ✅ Failed question generation falls back to static prompt (graceful fallback)
 
 **AI Follow-ups:**
 - ✅ Follow-up question appears when answer is <50 characters
@@ -1682,7 +1673,7 @@ const db = SQLite.openDatabaseSync('kolbs_app.db', {
 - ✅ AI adapts follow-ups based on type (manual verification)
 
 **AI Metrics:**
-- ✅ `ai_placeholders_shown` counts correctly
+- ✅ `ai_questions_shown` counts correctly
 - ✅ `ai_followups_shown` counts correctly
 - ✅ `ai_followups_answered` counts correctly
 - ✅ Metrics appear in export JSON
@@ -1720,12 +1711,12 @@ const db = SQLite.openDatabaseSync('kolbs_app.db', {
 
 ### 13.2 AI Quality Issues
 
-**Risk:** AI generates irrelevant or unhelpful placeholders/follow-ups
+**Risk:** AI generates irrelevant or unhelpful questions/follow-ups
 
 **Mitigation:**
 - Extensive prompt engineering (separate document)
 - Include Practice Area name and type in all prompts for context
-- Users can ignore AI suggestions - they're never auto-saved
+- Users see AI-generated questions but can proceed with their own answers
 - Feedback collection helps identify patterns
 - Post-MVP: Tune prompts based on feedback
 
@@ -1881,7 +1872,7 @@ const db = SQLite.openDatabaseSync('kolbs_app.db', {
 **AI Adoption:** (NEW)
 - % of reflections with `ai_assisted = true` (target: >60% on supported devices)
 - Average AI follow-ups answered per reflection
-- AI placeholder usage rate
+- AI question generation success rate
 
 **Coaching Tone Usage:** (NEW)
 - Distribution of Facilitative / Socratic / Supportive

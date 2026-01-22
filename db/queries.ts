@@ -523,7 +523,6 @@ export async function insertReflection(reflection: {
   step2_answer: string;
   step3_answer: string;
   step4_answer: string;
-  ai_placeholders_shown: number;
   ai_questions_shown: number;
   ai_followups_shown: number;
   ai_followups_answered: number;
@@ -540,11 +539,11 @@ export async function insertReflection(reflection: {
     `INSERT INTO reflections (
       id, session_id, coaching_tone, ai_assisted,
       step2_answer, step3_answer, step4_answer,
-      ai_placeholders_shown, ai_questions_shown, ai_followups_shown, ai_followups_answered,
+      ai_questions_shown, ai_followups_shown, ai_followups_answered,
       step2_question, step3_question, step4_question,
       feedback_rating, feedback_note,
       completed_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       reflection.id,
       reflection.session_id,
@@ -553,7 +552,6 @@ export async function insertReflection(reflection: {
       reflection.step2_answer,
       reflection.step3_answer,
       reflection.step4_answer,
-      reflection.ai_placeholders_shown,
       reflection.ai_questions_shown,
       reflection.ai_followups_shown,
       reflection.ai_followups_answered,
@@ -583,7 +581,6 @@ export async function updateReflection(
     step2_answer?: string;
     step3_answer?: string;
     step4_answer?: string;
-    ai_placeholders_shown?: number;
     ai_questions_shown?: number;
     ai_followups_shown?: number;
     ai_followups_answered?: number;
@@ -620,10 +617,6 @@ export async function updateReflection(
   if (updates.step4_answer !== undefined) {
     updateFields.push('step4_answer = ?');
     values.push(updates.step4_answer);
-  }
-  if (updates.ai_placeholders_shown !== undefined) {
-    updateFields.push('ai_placeholders_shown = ?');
-    values.push(updates.ai_placeholders_shown);
   }
   if (updates.ai_questions_shown !== undefined) {
     updateFields.push('ai_questions_shown = ?');
@@ -711,7 +704,6 @@ export interface SessionWithFullReflection extends SessionWithReflection {
   step2_answer: string | null;
   step3_answer: string | null;
   step4_answer: string | null;
-  ai_placeholders_shown: number | null;
   ai_questions_shown: number | null;
   ai_followups_shown: number | null;
   ai_followups_answered: number | null;
@@ -743,7 +735,6 @@ export async function getSessionWithFullReflection(
             r.step2_answer,
             r.step3_answer,
             r.step4_answer,
-            r.ai_placeholders_shown,
             r.ai_questions_shown,
             r.ai_followups_shown,
             r.ai_followups_answered,
@@ -885,7 +876,7 @@ export async function getExportData(): Promise<any[]> {
               s.target_duration_seconds,
               r.coaching_tone, r.ai_assisted,
               r.step2_answer, r.step3_answer, r.step4_answer,
-              r.ai_placeholders_shown, r.ai_questions_shown, r.ai_followups_shown, r.ai_followups_answered,
+              r.ai_questions_shown, r.ai_followups_shown, r.ai_followups_answered,
               r.step2_question, r.step3_question, r.step4_question,
               r.feedback_rating, r.feedback_note, r.completed_at, r.updated_at
        FROM sessions s
