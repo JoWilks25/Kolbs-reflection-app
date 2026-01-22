@@ -1,7 +1,7 @@
 /**
  * Prompt Service for AI-Assisted Coaching
  * 
- * Builds context-aware prompts for placeholder generation and follow-up questions
+ * Builds context-aware prompts for step question generation and follow-up questions
  * based on coaching tone and Practice Area type.
  */
 

@@ -23,8 +23,7 @@ const initialReflectionDraft: ReflectionDraft = {
   step2: '',
   step3: '',
   step4: '',
-  aiPlaceholdersShown: 0,  // DEPRECATED: kept for backward compatibility
-  aiQuestionsShown: 0,  // NEW: Count of AI-generated questions shown
+  aiQuestionsShown: 0,  // Count of AI-generated questions shown
   aiFollowupsShown: 0,
   aiFollowupsAnswered: 0,
   step2Question: null,  // NEW: Stores actual generated question text

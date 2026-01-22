@@ -107,8 +107,7 @@ export interface Reflection {
   step4_answer: string;  // "Next action"
 
   // AI interaction metrics (NEW in v2.0)
-  ai_placeholders_shown: number;
-  ai_questions_shown: number;  // NEW: Count of AI-generated questions shown
+  ai_questions_shown: number;  // Count of AI-generated questions shown
   ai_followups_shown: number;
   ai_followups_answered: number;
 
@@ -160,8 +159,7 @@ export interface ReflectionDraft {
   step4: string;
 
   // AI interaction tracking (NEW in v2.0)
-  aiPlaceholdersShown: number;
-  aiQuestionsShown: number;  // NEW: Count of AI-generated questions shown
+  aiQuestionsShown: number;  // Count of AI-generated questions shown
   aiFollowupsShown: number;
   aiFollowupsAnswered: number;
 
@@ -234,7 +232,7 @@ export interface AppActions {
     field: K,
     value: ReflectionDraft[K]
   ) => void;
-  incrementAiMetric: (metric: 'aiQuestionsShown' | 'aiFollowupsShown' | 'aiFollowupsAnswered') => void;  // UPDATED: aiPlaceholdersShown -> aiQuestionsShown
+  incrementAiMetric: (metric: 'aiQuestionsShown' | 'aiFollowupsShown' | 'aiFollowupsAnswered') => void;
   clearReflectionDraft: () => void;
 
   // UI actions
@@ -263,8 +261,7 @@ export interface ExportReflection {
   ai_assisted: boolean;
 
   // AI interaction metrics
-  ai_placeholders_shown: number;  // DEPRECATED: kept for backward compatibility
-  ai_questions_shown: number;  // NEW: Count of AI-generated questions shown
+  ai_questions_shown: number;  // Count of AI-generated questions shown
   ai_followups_shown: number;
   ai_followups_answered: number;
 

@@ -69,10 +69,10 @@ Version 2.0 redesigns this approach using **AI-assisted coaching tones** that ad
 |---|---|---|
 | **User selects** | Format based on depth/length (Direct/Reflective/Minimalist) | Coaching tone based on preferred style (Facilitative/Socratic/Supportive) |
 | **Question structure** | Different wording per format, static | Single 3-step Kolb structure, dynamic adaptation |
-| **Personalization** | None — same questions for all Practice Areas | AI generates context-aware placeholders and follow-ups based on Practice Area, intent, and previous answers |
+| **Personalization** | None — same questions for all Practice Areas | AI generates context-aware questions and follow-ups based on Practice Area, intent, and previous answers |
 | **User control** | Format locked once selected | AI toggle: users can enable/disable AI per session |
 | **Without AI** | N/A (no AI in v1.0) | Tone affects base prompt wording only, no adaptive follow-ups |
-| **With AI** | N/A | Tone shapes AI's placeholder starters, follow-up questions, and probing style |
+| **With AI** | N/A | Tone shapes AI's generated questions, follow-up questions, and probing style |
 
 ### Why This Redesign?
 
@@ -92,7 +92,7 @@ Version 2.0 redesigns this approach using **AI-assisted coaching tones** that ad
 - As a returning user, at each Session start, I want to see my last "What will you try next?" answer from my previous Session in this Practice Area's Series, enabling directed intent
 - As a reflecting practitioner, I want my post-Session review to cover what actually happened, the lesson or insight gained, and what I will pursue next, locked into an ongoing chain
 - As someone tracking growth in a skill, I want to view and navigate the full, chronological Series of Sessions in each Practice Area, with all intentions and lessons connected—they are never fragmented or standalone
-- **As a user who finds blank prompts difficult, I want AI-generated starter phrases relevant to my Practice Area and intent, so I can begin reflecting without friction**
+- **As a user who finds blank prompts difficult, I want AI-generated questions tailored to my Practice Area and intent, so I can begin reflecting without friction**
 - **As a reflective learner, I want to choose a coaching tone that matches my current needs (exploratory vs. structured vs. supportive), so the reflection process feels appropriate for each session**
 - **As a privacy-conscious user, I want AI coaching to run entirely on my device with no cloud dependencies, so my reflections remain completely private**
 - As a user invested in the app's improvement, I want a quick, low-friction way to give feedback on the reflection coaching itself, so the experience can get better over time
@@ -148,8 +148,8 @@ Provides emotional scaffolding through encouragement, normalizing struggle, and 
 #### AI Toggle Behavior
 
 Per-session decision:
-- **AI ON**: Generates context-aware placeholder starters and adaptive follow-up questions based on Practice Area, intent, previous session's "What will you try next?", and the user's current answers
-- **AI OFF**: Shows tone-adapted base prompts only; no placeholders or follow-ups
+- **AI ON**: Generates context-aware questions and adaptive follow-up questions based on Practice Area, intent, previous session's "What will you try next?", and the user's current answers
+- **AI OFF**: Shows tone-adapted base prompts only; no AI-generated questions or follow-ups
 
 #### Tone Selection UI
 
@@ -197,13 +197,13 @@ The selected tone adjusts the wording and framing of each step:
 
 When AI is toggled ON, it provides two types of assistance:
 
-1. **Context-aware placeholder starters** (shown as grey text or tappable chips):
+1. **Context-aware step questions** (replaces static prompts):
    - Generated using: Practice Area name, today's intent, previous session's step 4 answer
-   - Examples: "I focused on…", "The main challenge was…", "Next time I will…"
-   - Never auto-saved; user must accept or ignore
+   - Tailored to the selected coaching tone and Practice Area type
+   - Examples: "You set out to practice left-hand independence. Walk me through what you actually did—what steps did you take?"
 
 2. **Adaptive follow-up questions** (max 1–2 per step):
-   - Only shown if user's answer is brief (<50 chars) or AI detects opportunity for deeper reflection
+   - Only shown if user's answer is brief (<150 chars) or AI detects opportunity for deeper reflection
    - Tailored by Practice Area type AND coaching tone
 
 #### How AI Adapts by Practice Area Type × Coaching Tone
@@ -331,7 +331,7 @@ The Series view offers high-level summaries per Practice Area:
 **Step 2**: Answer Kolb Steps 2–4
 - Three stepwise prompts, adapted to the chosen tone
 - Voice-first input with typing as fallback
-- If AI enabled: see context-aware placeholder starters and adaptive follow-ups
+- If AI enabled: see context-aware AI-generated questions and adaptive follow-ups
 - Autosave throughout—users can pause and resume
 
 **Step 3**: Rate the reflection coaching
@@ -363,7 +363,7 @@ After practicing piano, you select **"Piano: Hands Independence"**—your curren
 
 You begin practicing. When finished, you choose the **Socratic – Structured Inquiry** coaching tone and **toggle AI on** for this reflection.
 
-At Step 2, the AI shows a placeholder: "I focused on…" and the prompt: "What actually happened, step by step? What was different from what you expected?" You voice-answer: "Struggled with F major transitions at higher tempo."
+At Step 2, the AI generates a tailored question: "You set out to practice left-hand independence. Walk me through what you actually did—what steps did you take?" You voice-answer: "Struggled with F major transitions at higher tempo."
 
 Because your answer is brief, the AI asks a follow-up: "What assumptions did you have going in that proved incorrect?" You respond: "I thought I could maintain the slower tempo's precision—turns out I need more finger independence drills."
 
@@ -392,12 +392,12 @@ This Session is added in sequence to your Practice Area's single Series—always
 - **AI follow-up engagement rate**: % of AI-generated follow-ups that users actually answer vs. skip
 - User-reported reduction in reflection effort vs. manual journaling (target: >30%)
 - Repeat review of Practice Area Series timelines (indicator of value and engagement)
-- Qualitative themes from optional reflection feedback notes (e.g., "AI questions felt intrusive", "tone didn't match my mood", "placeholders were helpful")
+- Qualitative themes from optional reflection feedback notes (e.g., "AI questions felt intrusive", "tone didn't match my mood", "AI questions were helpful")
 
 ### Technical & Privacy Metrics
 
 - Session autosave reliability
-- **AI response latency**: Time from user request to placeholder/follow-up generation (target: <2 seconds)
+- **AI response latency**: Time from user request to question/follow-up generation (target: <2 seconds)
 - Privacy audit success (100% local storage, no data leakage)
 - Voice input usage vs. typing at each prompt
 
@@ -409,7 +409,7 @@ This Session is added in sequence to your Practice Area's single Series—always
 
 - Mobile-first, responsive UI enforcing a stepwise, sequential Practice Area → Session → Series structure
 - On-device, privacy-first voice-to-text input using OS-native APIs (iOS/Android)
-- **On-device LLM integration** for real-time AI coaching (placeholder generation, adaptive follow-ups)
+- **On-device LLM integration** for real-time AI coaching (question generation, adaptive follow-ups)
 - Strong, unbreakable tagging/linkage ensuring every Session exists only as the next step in a Practice Area's Series
 - Local, encrypted storage with autosave and resume capability
 - Device authentication via PIN or biometric only
@@ -442,7 +442,7 @@ This Session is added in sequence to your Practice Area's single Series—always
 - Seamless, reliable voice input across various user environments (background noise, accents, etc.)
 - User-friendly enforcement of a single Series model—avoiding confusion about branching, tagging, or subcategories
 - Bulletproof device-level privacy enforcement
-- **On-device LLM response quality and latency** for real-time placeholder generation
+- **On-device LLM response quality and latency** for real-time question generation
 - **Balancing AI helpfulness with user agency**—avoiding over-coaching or making users feel controlled
 - **Storage hygiene and draft management**—ensuring reflection drafts don't accumulate indefinitely while preserving crash recovery benefits
 
@@ -467,7 +467,7 @@ This Session is added in sequence to your Practice Area's single Series—always
 - Sequential Session tagging and review
 - **3 coaching tones (Facilitative, Socratic, Supportive) with tone selection screen**
 - **AI toggle per session**
-- **AI placeholder generation for Kolb steps 2–4 based on Practice Area, intent, and previous session**
+- **AI question generation for Kolb steps 2–4 based on Practice Area, intent, and previous session**
 - **Adaptive follow-up questions (max 1–2 per step) based on Practice Area type, tone, and user's answer length**
 - Kolb Steps 2–4 prompt flow with voice/text input
 - Reflection feedback capture (emoji + optional note)—tracks AI-on vs. AI-off sentiment
@@ -485,7 +485,7 @@ This Session is added in sequence to your Practice Area's single Series—always
 - Robust autosave and resume functionality
 - Rigid enforcement of Series-only model (no orphaned Sessions)
 - Series navigation with filters (by tone, by AI-on/off, by reflection feedback)
-- **AI response quality testing**: ensure placeholders and follow-ups are relevant and non-intrusive
+- **AI response quality testing**: ensure AI-generated questions and follow-ups are relevant and non-intrusive
 - **AI latency optimization**: target <2 sec response time
 - Export/backup functionality (includes tone and ai_assisted flag in JSON)
 

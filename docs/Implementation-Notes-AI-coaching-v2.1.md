@@ -27,7 +27,7 @@ Version 2.0 introduces a major redesign of the reflection system:
 |--------|------|------|
 | **Reflection Selection** | 3 fixed formats (Direct, Reflective, Minimalist) | 3 coaching tones (Facilitative, Socratic, Supportive) |
 | **Question Adaptation** | Static questions per format | AI-adapted prompts based on Practice Area type and context |
-| **AI Features** | None | On-device LLM for placeholders and follow-ups |
+| **AI Features** | None | On-device LLM for question generation and follow-ups |
 | **Practice Area Types** | None | User-selected (solo_skill, performance, interpersonal, creative) |
 | **Device Requirements** | iOS 15+ | iOS 26+ for AI features (graceful degradation for older) |
 
@@ -50,7 +50,7 @@ Version 2.0 introduces a major redesign of the reflection system:
 
 4. **Graceful Degradation:** Full app functionality on all devices
    - Coaching tones work identically with or without AI
-   - AI placeholders and follow-ups only available on iOS 26+ with Apple Intelligence
+   - AI-generated questions and follow-ups only available on iOS 26+ with Apple Intelligence
 
 ### Database Schema Changes
 
@@ -61,7 +61,7 @@ ALTER TABLE practice_areas ADD COLUMN type TEXT NOT NULL DEFAULT 'solo_skill';
 -- reflections: Renamed format → coaching_tone, added AI columns
 coaching_tone INTEGER NOT NULL,  -- 1=Facilitative, 2=Socratic, 3=Supportive
 ai_assisted INTEGER NOT NULL DEFAULT 1,
-ai_placeholders_shown INTEGER DEFAULT 0,
+ai_questions_shown INTEGER DEFAULT 0,
 ai_followups_shown INTEGER DEFAULT 0,
 ai_followups_answered INTEGER DEFAULT 0,
 ```
@@ -84,7 +84,7 @@ ai_followups_answered INTEGER DEFAULT 0,
 | Screen | Changes |
 |--------|---------|
 | `ReflectionToneScreen` | New coaching tone cards + AI toggle |
-| `ReflectionPromptsScreen` | AI placeholders, follow-ups, tone-adapted prompts |
+| `ReflectionPromptsScreen` | AI-generated questions, follow-ups, tone-adapted prompts |
 | `ReflectionFeedbackScreen` | AI-aware question variant |
 | `SeriesTimelineScreen` | Tone badges (F/S/Sup) + AI icon |
 | `PracticeAreaModal` | Type dropdown added |
@@ -316,10 +316,10 @@ All enhancements support the core PRD goals:
 | PRD Goal | Supporting Enhancement |
 |----------|------------------------|
 | "Drive at least 3 consecutive reflection Sessions per user per week" | **Blocking guard** enforces reflection completion |
-| "Show >30% reduction in time and effort spent on reflection" | **Sort toggle** enables faster navigation; **AI placeholders** reduce blank-page friction (v2) |
+| "Show >30% reduction in time and effort spent on reflection" | **Sort toggle** enables faster navigation; **AI-generated questions** reduce blank-page friction (v2) |
 | "Demonstrate improved contextual learning and Practice Area progression" | **Blocking guard** maintains learning continuity; **Practice Area types** enable tailored AI guidance (v2) |
 | "Provide 100% assurance of local data privacy and security" | **Draft cleanup** removes stale sensitive data; **On-device AI** ensures no cloud processing (v2) |
-| "Gather actionable feedback on AI coaching effectiveness" (v2) | **AI metrics tracking** captures placeholder/follow-up engagement |
+| "Gather actionable feedback on AI coaching effectiveness" (v2) | **AI metrics tracking** captures question/follow-up engagement |
 | "Focus reflection on Kolb Steps 2-4 with optional AI coaching" (v2) | **Coaching tones** adapt prompts; **AI follow-ups** deepen reflection |
 
 ---
@@ -416,9 +416,9 @@ The following features were mentioned in the PRD but are explicitly deferred:
 - ⬜ Coaching tone icons display correctly
 - ⬜ Practice Area type dropdown works in PracticeAreaModal
 - ⬜ AI toggle visible only on supported devices
-- ⬜ AI placeholders generate in <2 seconds
+- ⬜ AI questions generate in <2 seconds
 - ⬜ AI follow-ups appear for brief answers (<50 chars)
-- ⬜ AI metrics tracked correctly (placeholders, follow-ups shown/answered)
+- ⬜ AI metrics tracked correctly (questions, follow-ups shown/answered)
 - ⬜ Graceful degradation on unsupported devices
 - ⬜ Database migration from v1 schema works correctly
 - ⬜ Export includes coaching_tone and AI metadata
@@ -444,7 +444,7 @@ The following features were mentioned in the PRD but are explicitly deferred:
 1. **User Testing:** Validate blocking guard doesn't create frustration
 2. **Analytics:** Track sort toggle usage to validate value
 3. **Monitoring:** Log draft cleanup counts to verify storage hygiene
-4. **AI Quality Review:** Monitor AI placeholder and follow-up relevance (v2)
+4. **AI Quality Review:** Monitor AI question and follow-up relevance (v2)
 5. **Latency Monitoring:** Track AI response times against <2s target (v2)
 
 ### Medium-Term (Post-Launch)
@@ -476,7 +476,7 @@ The implemented enhancements strengthen the MVP by:
 
 **v2.0 Additions:**
 
-5. **AI-Assisted Coaching:** Context-aware placeholders and follow-ups enhance reflection depth
+5. **AI-Assisted Coaching:** Context-aware questions and follow-ups enhance reflection depth
 6. **Practice Area Types:** Classification enables more relevant AI guidance
 7. **Graceful Degradation:** Full functionality on all devices, AI as enhancement
 8. **Privacy-First AI:** 100% on-device processing maintains privacy guarantees

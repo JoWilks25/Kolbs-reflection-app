@@ -53,7 +53,7 @@ export const checkAIAvailability = async (): Promise<boolean> => {
 
   // The apple() provider doesn't expose isAvailable, so we check version only
   // Actual hardware availability will be determined when we try to use it
-  // (errors will be caught gracefully in generatePlaceholder/generateFollowup)
+  // (errors will be caught gracefully in generateStepQuestion/generateFollowup)
   console.log('AI availability check: iOS version supported');
   return true;
 };
@@ -77,7 +77,7 @@ export const generateStepQuestion = async (
     const result = await generateText({
       model: apple() as any, // Type assertion to work around dependency version mismatch
       prompt,
-      maxOutputTokens: 80, // Longer than placeholder (was 50) for full questions
+      maxOutputTokens: 80, // Full question length
       temperature: 0.7, // Balanced creativity
     });
     // console.log('result', result)
