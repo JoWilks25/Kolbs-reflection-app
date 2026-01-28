@@ -55,9 +55,9 @@ export async function importJsonData(fileUri: string): Promise<ImportResult> {
       throw new Error('Invalid JSON file. Please select a valid export file.');
     }
 
-    // Step 3: Validate schema
+    // Step 3: Validate schema (v2-only ExportPayload)
     const payload = validateImportPayload(data);
-    console.log(`Validated payload with ${payload.practiceareas.length} practice areas`);
+    console.log(`Validated payload with ${payload.practice_areas.length} practice areas`);
 
     // Step 4: Get database and begin transaction
     const db = getDatabase();
@@ -75,7 +75,7 @@ export async function importJsonData(fileUri: string): Promise<ImportResult> {
       console.log('Existing data cleared');
 
       // Step 6: Insert practice areas, sessions, and reflections
-      for (const practiceArea of payload.practiceareas) {
+      for (const practiceArea of payload.practice_areas) {
         await insertPracticeArea(db, practiceArea);
         practiceAreasCount++;
 
@@ -138,7 +138,7 @@ export async function importJsonData(fileUri: string): Promise<ImportResult> {
  * Ensures all required fields are present and have correct types
  * 
  * @param data - Raw parsed JSON data
- * @returns Validated ExportPayload
+ * @returns Validated ExportPayload schema
  * @throws Error if validation fails
  */
 function validateImportPayload(data: any): ExportPayload {
@@ -147,17 +147,32 @@ function validateImportPayload(data: any): ExportPayload {
     throw new Error('Invalid file format: Expected JSON object');
   }
 
-  if (!data.exportdate || typeof data.exportdate !== 'string') {
-    throw new Error('Invalid file format: Missing or invalid exportdate');
+  const metadata = data.metadata;
+  const practiceAreas = data.practice_areas;
+
+  if (!metadata || typeof metadata !== 'object') {
+    throw new Error('Invalid file format: Missing or invalid metadata object');
   }
 
-  if (!Array.isArray(data.practiceareas)) {
-    throw new Error('Invalid file format: Missing or invalid practiceareas array');
+  if (typeof metadata.export_date !== 'string') {
+    throw new Error('Invalid file format: Missing or invalid metadata.export_date');
   }
+
+  if (typeof metadata.app_version !== 'string' || metadata.app_version.trim() === '') {
+    throw new Error('Invalid file format: Missing or invalid metadata.app_version');
+  }
+
+  if (!Array.isArray(practiceAreas)) {
+    throw new Error('Invalid file format: Missing or invalid practice_areas array');
+  }
+
+  const allowedPracticeAreaTypes = ['solo_skill', 'performance', 'interpersonal', 'creative'];
 
   // Validate each practice area
-  for (let i = 0; i < data.practiceareas.length; i++) {
-    const pa = data.practiceareas[i];
+  practiceAreas.forEach((pa: any, i: number) => {
+    if (!pa || typeof pa !== 'object') {
+      throw new Error(`Invalid practice area at index ${i}: Expected object`);
+    }
 
     if (!pa.id || typeof pa.id !== 'string') {
       throw new Error(`Invalid practice area at index ${i}: Missing or invalid id`);
@@ -167,8 +182,16 @@ function validateImportPayload(data: any): ExportPayload {
       throw new Error(`Invalid practice area at index ${i}: Missing or invalid name`);
     }
 
-    if (typeof pa.createdat !== 'number') {
-      throw new Error(`Invalid practice area at index ${i}: Missing or invalid createdat`);
+    if (typeof pa.type !== 'string' || !allowedPracticeAreaTypes.includes(pa.type)) {
+      throw new Error(`Invalid practice area at index ${i}: Missing or invalid type`);
+    }
+
+    if (typeof pa.type_label !== 'string') {
+      throw new Error(`Invalid practice area at index ${i}: Missing or invalid type_label`);
+    }
+
+    if (typeof pa.created_at !== 'number') {
+      throw new Error(`Invalid practice area at index ${i}: Missing or invalid created_at`);
     }
 
     if (!Array.isArray(pa.sessions)) {
@@ -176,71 +199,154 @@ function validateImportPayload(data: any): ExportPayload {
     }
 
     // Validate each session
-    for (let j = 0; j < pa.sessions.length; j++) {
-      const session = pa.sessions[j];
+    pa.sessions.forEach((session: any, j: number) => {
+      if (!session || typeof session !== 'object') {
+        throw new Error(`Invalid session at PA ${i}, session ${j}: Expected object`);
+      }
 
       if (!session.id || typeof session.id !== 'string') {
         throw new Error(`Invalid session at PA ${i}, session ${j}: Missing or invalid id`);
       }
 
-      if (session.previoussessionid !== null && typeof session.previoussessionid !== 'string') {
-        throw new Error(`Invalid session at PA ${i}, session ${j}: Invalid previoussessionid`);
+      if (
+        session.previous_session_id !== null &&
+        typeof session.previous_session_id !== 'string'
+      ) {
+        throw new Error(
+          `Invalid session at PA ${i}, session ${j}: Invalid previous_session_id`
+        );
       }
 
       if (!session.intent || typeof session.intent !== 'string') {
         throw new Error(`Invalid session at PA ${i}, session ${j}: Missing or invalid intent`);
       }
 
-      if (typeof session.startedat !== 'number') {
-        throw new Error(`Invalid session at PA ${i}, session ${j}: Missing or invalid startedat`);
+      if (typeof session.started_at !== 'number') {
+        throw new Error(`Invalid session at PA ${i}, session ${j}: Missing or invalid started_at`);
       }
 
-      if (session.endedat !== null && typeof session.endedat !== 'number') {
-        throw new Error(`Invalid session at PA ${i}, session ${j}: Invalid endedat`);
+      if (session.ended_at !== null && typeof session.ended_at !== 'number') {
+        throw new Error(`Invalid session at PA ${i}, session ${j}: Invalid ended_at`);
       }
 
-      if (session.targetdurationseconds !== null && typeof session.targetdurationseconds !== 'number') {
-        throw new Error(`Invalid session at PA ${i}, session ${j}: Invalid targetdurationseconds`);
+      if (
+        session.target_duration_seconds !== null &&
+        typeof session.target_duration_seconds !== 'number'
+      ) {
+        throw new Error(
+          `Invalid session at PA ${i}, session ${j}: Invalid target_duration_seconds`
+        );
       }
 
       // Validate reflection if present
       if (session.reflection !== null) {
         const refl = session.reflection;
 
-        if (typeof refl.format !== 'number' || ![1, 2, 3].includes(refl.format)) {
-          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid format`);
+        if (!refl || typeof refl !== 'object') {
+          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Expected object`);
         }
 
-        if (typeof refl.step2answer !== 'string') {
-          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid step2answer`);
+        if (
+          typeof refl.coaching_tone !== 'number' ||
+          ![1, 2, 3].includes(refl.coaching_tone)
+        ) {
+          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid coaching_tone`);
         }
 
-        if (typeof refl.step3answer !== 'string') {
-          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid step3answer`);
+        if (typeof refl.coaching_tone_name !== 'string') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Missing or invalid coaching_tone_name`
+          );
         }
 
-        if (typeof refl.step4answer !== 'string') {
-          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid step4answer`);
+        if (typeof refl.ai_assisted !== 'boolean') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Missing or invalid ai_assisted`
+          );
         }
 
-        if (refl.feedbackrating !== null && (typeof refl.feedbackrating !== 'number' || refl.feedbackrating < 0 || refl.feedbackrating > 4)) {
-          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid feedbackrating`);
+        ['ai_questions_shown', 'ai_followups_shown', 'ai_followups_answered'].forEach(
+          (field) => {
+            if (typeof refl[field] !== 'number') {
+              throw new Error(
+                `Invalid reflection at PA ${i}, session ${j}: Missing or invalid ${field}`
+              );
+            }
+          }
+        );
+
+        ['step2_question', 'step3_question', 'step4_question'].forEach((field) => {
+          if (refl[field] !== null && typeof refl[field] !== 'string') {
+            throw new Error(
+              `Invalid reflection at PA ${i}, session ${j}: Invalid ${field} (must be string or null)`
+            );
+          }
+        });
+
+        if (typeof refl.what_happened !== 'string') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Missing or invalid what_happened`
+          );
         }
 
-        if (refl.feedbacknote !== null && typeof refl.feedbacknote !== 'string') {
-          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid feedbacknote`);
+        if (typeof refl.lessons_learned !== 'string') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Missing or invalid lessons_learned`
+          );
         }
 
-        if (typeof refl.completedat !== 'number') {
-          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid completedat`);
+        if (typeof refl.next_actions !== 'string') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Missing or invalid next_actions`
+          );
         }
 
-        if (refl.updatedat !== null && typeof refl.updatedat !== 'number') {
-          throw new Error(`Invalid reflection at PA ${i}, session ${j}: Invalid updatedat`);
+        if (
+          refl.feedback_rating !== null &&
+          (typeof refl.feedback_rating !== 'number' ||
+            refl.feedback_rating < 0 ||
+            refl.feedback_rating > 4)
+        ) {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Invalid feedback_rating`
+          );
+        }
+
+        if (
+          refl.feedback_rating_label !== null &&
+          typeof refl.feedback_rating_label !== 'string'
+        ) {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Invalid feedback_rating_label`
+          );
+        }
+
+        if (refl.feedback_note !== null && typeof refl.feedback_note !== 'string') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Invalid feedback_note`
+          );
+        }
+
+        if (typeof refl.completed_at !== 'number') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Missing or invalid completed_at`
+          );
+        }
+
+        if (refl.updated_at !== null && typeof refl.updated_at !== 'number') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Invalid updated_at (must be number or null)`
+          );
+        }
+
+        if (typeof refl.is_edited !== 'boolean') {
+          throw new Error(
+            `Invalid reflection at PA ${i}, session ${j}: Missing or invalid is_edited`
+          );
         }
       }
-    }
-  }
+    });
+  });
 
   return data as ExportPayload;
 }
@@ -269,9 +375,9 @@ async function clearDatabase(db: any): Promise<void> {
  */
 async function insertPracticeArea(db: any, practiceArea: ExportPracticeArea): Promise<void> {
   await db.runAsync(
-    `INSERT OR REPLACE INTO practice_areas (id, name, created_at, is_deleted)
-     VALUES (?, ?, ?, 0)`,
-    [practiceArea.id, practiceArea.name, practiceArea.createdat]
+    `INSERT OR REPLACE INTO practice_areas (id, name, type, created_at, is_deleted)
+     VALUES (?, ?, ?, ?, 0)`,
+    [practiceArea.id, practiceArea.name, practiceArea.type, practiceArea.created_at]
   );
 }
 
@@ -293,11 +399,11 @@ async function insertSession(db: any, session: ExportSession, practiceAreaId: st
     [
       session.id,
       practiceAreaId,
-      session.previoussessionid,
+      session.previous_session_id,
       session.intent,
-      session.targetdurationseconds,
-      session.startedat,
-      session.endedat,
+      session.target_duration_seconds,
+      session.started_at,
+      session.ended_at,
     ]
   );
 }
@@ -317,22 +423,31 @@ async function insertReflection(db: any, reflection: ExportReflection, sessionId
 
   await db.runAsync(
     `INSERT OR REPLACE INTO reflections (
-      id, session_id, format,
+      id, session_id, coaching_tone, ai_assisted,
       step2_answer, step3_answer, step4_answer,
+      ai_questions_shown, ai_followups_shown, ai_followups_answered,
+      step2_question, step3_question, step4_question,
       feedback_rating, feedback_note,
       completed_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       reflectionId,
       sessionId,
-      reflection.format,
-      reflection.step2answer,
-      reflection.step3answer,
-      reflection.step4answer,
-      reflection.feedbackrating,
-      reflection.feedbacknote,
-      reflection.completedat,
-      reflection.updatedat,
+      reflection.coaching_tone,
+      reflection.ai_assisted ? 1 : 0,
+      reflection.what_happened,
+      reflection.lessons_learned,
+      reflection.next_actions,
+      reflection.ai_questions_shown,
+      reflection.ai_followups_shown,
+      reflection.ai_followups_answered,
+      reflection.step2_question,
+      reflection.step3_question,
+      reflection.step4_question,
+      reflection.feedback_rating,
+      reflection.feedback_note,
+      reflection.completed_at,
+      reflection.updated_at,
     ]
   );
 }

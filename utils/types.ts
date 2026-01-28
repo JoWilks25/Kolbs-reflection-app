@@ -1,29 +1,18 @@
 /**
- * TypeScript type definitions for Kolb's Reflection Cycle App v2.0
+ * TypeScript type definitions for Kolb's Reflection Cycle App
  * 
  * These types match the database schema defined in db/schema.ts
- * 
- * v2.0 Changes:
- * - Added PracticeAreaType and PRACTICE_AREA_TYPES constants
- * - Renamed ReflectionFormat to CoachingTone (1=Facilitative, 2=Socratic, 3=Supportive)
- * - Added AI-related fields to Reflection and ReflectionDraft
- * - Added AI state to AppState
+ * and describe the current JSON export/import schema.
  */
 
 // ============================================================================
 // Core Entity Types (matching database tables)
 // ============================================================================
 
-/**
- * Practice Area Type - Classification for AI adaptation
- * NEW in v2.0
- */
+/** Practice Area Type - Classification for AI adaptation */
 export type PracticeAreaType = 'solo_skill' | 'performance' | 'interpersonal' | 'creative';
 
-/**
- * Practice Area Type definitions with labels and descriptions
- * NEW in v2.0
- */
+/** Practice Area Type definitions with labels and descriptions */
 export const PRACTICE_AREA_TYPES = [
   { value: 'solo_skill' as const, label: 'Solo Skill', description: 'Technical practice, measurable progress' },
   { value: 'performance' as const, label: 'Performance', description: 'Execution under pressure, audience awareness' },
@@ -33,7 +22,6 @@ export const PRACTICE_AREA_TYPES = [
 
 /**
  * Practice Area - A domain of practice (e.g., "Piano", "Public Speaking")
- * UPDATED in v2.0: Added type field
  */
 export interface PracticeArea {
   id: string;
@@ -57,7 +45,6 @@ export interface PracticeAreaWithStats extends PracticeArea {
 
 /**
  * Session - A single practice session within a Practice Area
- * UPDATED in v2.2: Added intent refinement tracking fields
  */
 export interface Session {
   id: string;
@@ -83,7 +70,6 @@ export interface PendingReflection extends Session {
 
 /**
  * Session with joined reflection data - Used for Series Timeline view
- * UPDATED in v2.0: Renamed format to coaching_tone, added AI fields
  */
 export interface SessionWithReflection extends Session {
   coaching_tone: CoachingTone | null;  // RENAMED from format
@@ -95,7 +81,6 @@ export interface SessionWithReflection extends Session {
 
 /**
  * Reflection - A completed reflection for a session
- * UPDATED in v2.0: Renamed format to coaching_tone, added AI fields
  */
 export interface Reflection {
   id: string;
@@ -128,7 +113,7 @@ export interface Reflection {
 // ============================================================================
 
 /**
- * Coaching Tone types (RENAMED from ReflectionFormat in v2.0):
+ * Coaching Tone types:
  * 1 = Facilitative (guided discovery)
  * 2 = Socratic (structured inquiry)
  * 3 = Supportive (encouraging)
@@ -149,7 +134,6 @@ export type FeedbackRating = 0 | 1 | 2 | 3 | 4 | null;
 /**
  * Reflection draft state for in-progress reflections
  * Used in Zustand store to track reflection being composed
- * UPDATED in v2.0: Renamed format to coachingTone, added AI fields
  */
 export interface ReflectionDraft {
   coachingTone: CoachingTone | null;  // RENAMED from format
@@ -178,7 +162,6 @@ export interface ReflectionDraft {
 
 /**
  * Complete app state shape for Zustand store
- * UPDATED in v2.0: Added AI capability state
  */
 export interface AppState {
   // Practice Area state
@@ -207,7 +190,6 @@ export interface AppState {
 
 /**
  * App store actions
- * UPDATED in v2.0: Added AI actions, renamed format to coaching tone
  */
 export interface AppActions {
   // Practice Area actions
@@ -250,10 +232,9 @@ export type AppStore = AppState & AppActions;
 // ============================================================================
 
 /**
- * Exported reflection data with human-readable labels and descriptive field names
- * Uses snake_case for consistency with database schema and better LLM analysis compatibility
- * Optimized for pattern analysis with AI tools (ChatGPT, Claude, etc.)
- * UPDATED in v2.0: Renamed format to coaching_tone, added AI fields, descriptive Kolb step names
+ * Exported reflection data with human-readable labels and descriptive field names.
+ * Uses snake_case for consistency with the database schema and better LLM analysis compatibility.
+ * Optimized for pattern analysis with AI tools (ChatGPT, Claude, etc.).
  */
 export interface ExportReflection {
   coaching_tone: number;  // 1=Facilitative, 2=Socratic, 3=Supportive
@@ -306,8 +287,7 @@ export interface ExportSession {
 }
 
 /**
- * Exported practice area with sessions array and type classification
- * UPDATED in v2.0: Added type and type_label fields
+ * Exported practice area with sessions array and type classification.
  */
 export interface ExportPracticeArea {
   id: string;
@@ -319,14 +299,13 @@ export interface ExportPracticeArea {
 }
 
 /**
- * Top-level export payload structure with metadata
- * Optimized for LLM analysis - includes summary statistics and human-readable labels
- * UPDATED in v2.0: Added metadata object, app_version field
+ * Top-level export payload structure with metadata.
+ * Optimized for LLM analysis - includes summary statistics and human-readable labels.
  */
 export interface ExportPayload {
   metadata: {
     export_date: string;  // ISO 8601 timestamp
-    app_version: string;  // "2.0"
+    app_version: string;  // e.g. "1.0"
     total_practice_areas: number;
     total_sessions: number;
     total_reflections: number;

@@ -142,3 +142,38 @@ eas build --profile production --platform android
 - **preview**: Standalone app for internal testing
 - **production**: Standalone app for App Store/Play Store submission
 
+## Data Export/Import
+
+The app includes a JSON export/import feature for backing up practice data between builds.
+
+### Export schema (v1, snake_case)
+
+Exports use a single JSON schema defined in `utils/types.ts`:
+
+- Top-level shape matches `ExportPayload`:
+  - `metadata`: `{ export_date, app_version, total_practice_areas, total_sessions, total_reflections }`
+  - `practice_areas`: array of `ExportPracticeArea`
+- Practice areas, sessions, and reflections all use snake_case field names aligned with the DB schema
+  (e.g. `created_at`, `previous_session_id`, `target_duration_seconds`, `coaching_tone`, `ai_assisted`,
+  `ai_questions_shown`, `ai_followups_shown`, `ai_followups_answered`, etc.).
+
+Older export shapes (e.g. `exportdate` / `practiceareas` or camelCase-ish fields like `createdat`,
+`previoussessionid`, `format`, etc.) are not supported.
+
+### Manual roundtrip test
+
+To manually validate export/import:
+
+1. Create practice areas of each `PracticeAreaType` in the app and record several sessions with reflections:
+   - Use all three coaching tones (1, 2, 3).
+   - Include both AI-assisted and non-AI-assisted reflections so AI metrics vary.
+2. Use the in-app **Export** action to generate a JSON file.
+3. Inspect the JSON to confirm:
+   - Top-level keys are `metadata` and `practice_areas`.
+   - All nested field names are snake_case and match the export types.
+4. Clear the app’s local data (or use a fresh install) and use the **Import** action with the same file.
+5. Verify that:
+   - Practice area, session, and reflection counts match.
+   - Practice area types, coaching tones, AI metrics, AI questions, feedback, and timestamps match
+     the data you created before export.
+
