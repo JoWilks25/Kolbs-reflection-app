@@ -189,7 +189,11 @@ const ReflectionFeedbackScreen: React.FC = () => {
       >
         {/* Header Question */}
         <View style={styles.questionSection}>
-          <Text style={styles.questionText}>How did this reflection feel?</Text>
+          <Text style={styles.questionText}>
+            {reflectionDraft.aiAssisted
+              ? "How did the reflection coaching feel?"
+              : "How did this reflection feel?"}
+          </Text>
         </View>
 
         {/* Emoji Rating Buttons */}

@@ -35,16 +35,17 @@ type Props = {
   route: SeriesTimelineScreenRouteProp;
 };
 
-// Coaching tone badge labels
-const getToneLabel = (tone: CoachingTone | null): string | null => {
+
+// Coaching tone badge (abbreviated with color)
+const getToneBadge = (tone: CoachingTone | null): { abbrev: string; color: string } | null => {
   if (tone === null) return null;
   switch (tone) {
     case 1:
-      return "Facilitative";
+      return { abbrev: 'Facilitative', color: '#4CAF50' }; // Facilitative - green
     case 2:
-      return "Socratic";
+      return { abbrev: 'Socratic', color: '#2196F3' }; // Socratic - blue
     case 3:
-      return "Supportive";
+      return { abbrev: 'Supportive', color: '#FF9800' }; // Supportive - orange
     default:
       return null;
   }
@@ -80,8 +81,8 @@ const SessionCard = React.memo<{
   const targetMinutes = hasTarget ? Math.round(item.target_duration_seconds! / 60) : null;
   const targetMet = hasTarget && durationMinutes !== null && durationMinutes >= targetMinutes!;
 
-  // Coaching tone label
-  const toneLabel = getToneLabel(item.coaching_tone);
+  // Coaching tone badge
+  const toneBadge = getToneBadge(item.coaching_tone);
 
   const reflection = item.reflection_completed_at ? {
     id: '',
@@ -146,9 +147,16 @@ const SessionCard = React.memo<{
         )}
 
         {/* Coaching Tone Badge */}
-        {toneLabel && (
-          <View style={[styles.badge, styles.toneBadge]}>
-            <Text style={styles.badgeText}>{toneLabel}</Text>
+        {toneBadge && (
+          <View style={[styles.badge, { backgroundColor: toneBadge.color }]}>
+            <Text style={styles.badgeText}>{toneBadge.abbrev}</Text>
+          </View>
+        )}
+
+        {/* AI Indicator */}
+        {item.ai_assisted === 1 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>🤖</Text>
           </View>
         )}
 
@@ -158,15 +166,6 @@ const SessionCard = React.memo<{
             {reflectionBadge.emoji} {reflectionBadge.label}
           </Text>
         </View>
-
-        {/* Feedback Badge */}
-        {feedbackDisplay && (
-          <View style={[styles.badge, styles.feedbackBadge]}>
-            <Text style={styles.badgeText}>
-              {feedbackDisplay.emoji} {feedbackDisplay.label}
-            </Text>
-          </View>
-        )}
 
         {/* Edited Badge */}
         {isEdited && (
