@@ -38,8 +38,13 @@ export async function exportData(): Promise<void> {
     console.log(`Loaded ${rawData.length} practice areas for export`);
 
     // Step 2: Transform data and compute derived fields
+    let totalSessions = 0;
+    let totalReflections = 0;
+
     const practiceAreas: ExportPracticeArea[] = rawData.map((pa) => {
       const sessions: ExportSession[] = pa.sessions.map((session: any) => {
+        totalSessions += 1;
+
         // Compute actualdurationseconds
         const actualdurationseconds =
           session.ended_at !== null
@@ -55,6 +60,8 @@ export async function exportData(): Promise<void> {
         // Build reflection object if it exists
         let reflection: ExportReflection | null = null;
         if (session.coaching_tone !== null && session.coaching_tone !== undefined) {
+          totalReflections += 1;
+
           // Compute isedited
           const isedited =
             session.updated_at !== null &&
@@ -124,10 +131,18 @@ export async function exportData(): Promise<void> {
       };
     });
 
-    // Step 3: Build final payload
+    // Step 3: Build final payload matching ExportPayload schema
+    const totalPracticeAreas = practiceAreas.length;
+
     const payload: ExportPayload = {
-      exportdate: new Date().toISOString(),
-      practiceareas: practiceAreas,
+      metadata: {
+        export_date: new Date().toISOString(),
+        app_version: '1.0',
+        total_practice_areas: totalPracticeAreas,
+        total_sessions: totalSessions,
+        total_reflections: totalReflections,
+      },
+      practice_areas: practiceAreas,
     };
 
     console.log('Export payload built successfully');
