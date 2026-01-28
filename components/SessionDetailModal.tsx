@@ -259,13 +259,24 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Reflection</Text>
 
+                {/* Coaching Tone and AI Status */}
+                {toneLabel && (
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaItem}>
+                      <Text style={styles.metaLabel}>Coaching Tone</Text>
+                      <Text style={styles.metaValue}>{toneLabel}</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <Text style={styles.metaLabel}>AI Assisted</Text>
+                      <Text style={styles.metaValue}>
+                        {session.ai_assisted === 1 ? 'Yes' : 'No'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 {/* Format and timestamps */}
                 <View style={styles.reflectionMeta}>
-                  {toneLabel && (
-                    <View style={styles.toneBadge}>
-                      <Text style={styles.toneBadgeText}>{toneLabel}</Text>
-                    </View>
-                  )}
                   {isEdited && (
                     <View style={styles.editedBadge}>
                       <Text style={styles.editedBadgeText}>Edited</Text>
