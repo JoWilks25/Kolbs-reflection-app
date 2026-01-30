@@ -26,8 +26,9 @@ const SettingsScreen: React.FC = () => {
   // Get app version from expo-constants
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
-  // Get Zustand store actions
+  // Get Zustand store actions and AI state
   const setPracticeAreas = useAppStore((state) => state.setPracticeAreas);
+  const aiAvailable = useAppStore((state) => state.aiAvailable);
 
   useEffect(() => {
     const checkSecurity = async () => {
@@ -132,70 +133,6 @@ const SettingsScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Privacy & Security Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Privacy & Security</Text>
-
-        <View style={styles.card}>
-          <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>Device Lock Status</Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusIcon}>
-                {isSecure ? '✅' : '⚠️'}
-              </Text>
-              <Text style={[
-                styles.statusText,
-                isSecure ? styles.statusEnabled : styles.statusDisabled
-              ]}>
-                {isSecure ? 'Enabled' : 'Not Enabled'}
-              </Text>
-            </View>
-          </View>
-
-          {!isSecure && (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningText}>
-                Enable device lock in iOS Settings for better privacy protection.
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.divider} />
-
-          <Text style={styles.privacyStatement}>
-            All data is stored locally on your device, encrypted at rest.{'\n'}
-            No cloud sync or external analytics.
-          </Text>
-        </View>
-      </View>
-
-      {/* Storage Management Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Storage Management</Text>
-
-        <View style={styles.card}>
-          <Text style={styles.cardDescription}>
-            Clean up old reflection drafts that are no longer needed.
-          </Text>
-
-          <TouchableOpacity
-            style={[styles.cleanupButton, isCleaningDrafts && styles.cleanupButtonDisabled]}
-            onPress={handleCleanupDrafts}
-            disabled={isCleaningDrafts}
-          >
-            {isCleaningDrafts ? (
-              <ActivityIndicator size="small" color={COLORS.surface} />
-            ) : (
-              <Text style={styles.cleanupButtonText}>Clean Up Old Drafts</Text>
-            )}
-          </TouchableOpacity>
-
-          <Text style={styles.cleanupHint}>
-            Removes drafts for completed, deleted, or sessions older than 48 hours.
-          </Text>
-        </View>
-      </View>
-
       {/* Data Export Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Export Data</Text>
@@ -246,6 +183,96 @@ const SettingsScreen: React.FC = () => {
 
           <Text style={styles.importHint}>
             Select a JSON export file to restore your data. All current data will be replaced.
+          </Text>
+        </View>
+      </View>
+
+      {/* Privacy & Security Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Privacy & Security</Text>
+
+        <View style={styles.card}>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Device Lock Status</Text>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusIcon}>
+                {isSecure ? '✅' : '⚠️'}
+              </Text>
+              <Text style={[
+                styles.statusText,
+                isSecure ? styles.statusEnabled : styles.statusDisabled
+              ]}>
+                {isSecure ? 'Enabled' : 'Not Enabled'}
+              </Text>
+            </View>
+          </View>
+
+          {!isSecure && (
+            <View style={styles.warningBox}>
+              <Text style={styles.warningText}>
+                Enable device lock in iOS Settings for better privacy protection.
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.divider} />
+
+          <Text style={styles.privacyStatement}>
+            All data is stored locally on your device, encrypted at rest.{'\n'}
+            No cloud sync or external analytics.
+          </Text>
+        </View>
+      </View>
+
+      {/* AI Coaching Status Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>AI Coaching Status</Text>
+
+        <View style={styles.card}>
+          {aiAvailable ? (
+            <View style={styles.statusRow}>
+              <Text style={styles.statusIcon}>✅</Text>
+              <Text style={[styles.statusText, styles.statusEnabled]}>
+                AI coaching available (Apple Intelligence)
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.statusRow}>
+              <Text style={styles.statusIcon}>ℹ️</Text>
+              <Text style={[styles.statusText, styles.statusUnavailable]}>
+                AI coaching unavailable on this device. Coaching tones still work without AI.
+              </Text>
+            </View>
+          )}
+          <Text style={styles.helpText}>
+            AI coaching runs entirely on your device. Your reflections are never sent to any server.
+          </Text>
+        </View>
+      </View>
+
+      {/* Storage Management Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Storage Management</Text>
+
+        <View style={styles.card}>
+          <Text style={styles.cardDescription}>
+            Clean up old reflection drafts that are no longer needed.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.cleanupButton, isCleaningDrafts && styles.cleanupButtonDisabled]}
+            onPress={handleCleanupDrafts}
+            disabled={isCleaningDrafts}
+          >
+            {isCleaningDrafts ? (
+              <ActivityIndicator size="small" color={COLORS.surface} />
+            ) : (
+              <Text style={styles.cleanupButtonText}>Clean Up Old Drafts</Text>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.cleanupHint}>
+            Removes drafts for completed, deleted, or sessions older than 48 hours.
           </Text>
         </View>
       </View>
@@ -332,6 +359,15 @@ const styles = StyleSheet.create({
   },
   statusDisabled: {
     color: COLORS.warning,
+  },
+  statusUnavailable: {
+    color: COLORS.text.secondary,
+  },
+  helpText: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.sm,
+    marginTop: SPACING.sm,
   },
   warningBox: {
     backgroundColor: COLORS.warning + '20', // 20% opacity
