@@ -2,6 +2,11 @@
 
 A React Native app for tracking practice sessions and reflections using Kolb's Experiential Learning Cycle.
 
+## Platform Support
+
+- Android: officially supported on Android 10+ (API 29+).
+- Older Android versions are not officially tested.
+
 ## Local Development
 
 ### Prerequisites
