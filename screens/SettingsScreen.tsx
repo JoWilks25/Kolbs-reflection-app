@@ -9,6 +9,7 @@ import { exportData } from "../services/exportService";
 import { importJsonData } from "../services/importService";
 import { getPracticeAreas } from "../db/queries";
 import { useAppStore } from "../stores/appStore";
+import { getAICoachingStatusMessage } from "../utils/aiStatusMessage";
 
 /**
  * Settings Screen (Minimal Implementation)
@@ -233,14 +234,14 @@ const SettingsScreen: React.FC = () => {
             <View style={styles.statusRow}>
               <Text style={styles.statusIcon}>✅</Text>
               <Text style={[styles.statusText, styles.statusEnabled]}>
-                AI coaching available (Apple Intelligence)
+                {getAICoachingStatusMessage(aiAvailable)}
               </Text>
             </View>
           ) : (
             <View style={styles.statusRow}>
               <Text style={styles.statusIcon}>ℹ️</Text>
               <Text style={[styles.statusText, styles.statusUnavailable]}>
-                AI coaching unavailable on this device. Coaching tones still work without AI.
+                {getAICoachingStatusMessage(aiAvailable)}
               </Text>
             </View>
           )}
