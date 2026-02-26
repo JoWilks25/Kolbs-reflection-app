@@ -9,12 +9,17 @@
  * - Apple Intelligence-enabled device (iPhone 15 Pro+, M-series iPad/Mac)
  */
 
-import { apple } from '@react-native-ai/apple';
+// import { apple } from '@react-native-ai/apple';
 import { generateText } from 'ai';
 import { Platform } from 'react-native';
 import { buildFollowupPrompt, buildStepQuestionPrompt, buildIntentAnalysisPrompt, getStep2FollowupNudge, getHardcodedFollowup, type AIContext } from './promptService';
 import type { CoachingTone, PracticeAreaType } from '../utils/types';
 import { TONE_PROMPTS } from '../utils/constants';
+
+const apple =
+  Platform.OS === 'ios'
+    ? require('@react-native-ai/apple').apple
+    : null;
 
 // Re-export AIContext for consumers
 export type { AIContext } from './promptService';
