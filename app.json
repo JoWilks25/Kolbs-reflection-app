@@ -13,7 +13,8 @@
       "backgroundColor": "#ffffff"
     },
     "platform": [
-      "ios"
+      "ios",
+      "android"
     ],
     "ios": {
       "supportsTablet": true,

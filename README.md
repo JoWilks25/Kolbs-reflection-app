@@ -48,6 +48,53 @@ eas build --profile preview --platform android
 
 After the build completes, download the app from the EAS dashboard and install it on your device.
 
+## Internal Android Testing (EAS, No Play Store)
+
+Use this flow for team testing builds only.
+
+### Build command (single command)
+
+```bash
+npm run build:android:preview
+```
+
+This runs:
+
+```bash
+eas build --platform android --profile preview
+```
+
+The `preview` profile is configured for internal distribution and generates an installable Android APK.
+
+### Get the APK artifact
+
+1. Run the build command and wait for EAS to finish.
+2. Open the build link shown in terminal output (or the EAS dashboard).
+3. Download the generated APK.
+4. Share the APK or EAS build link with testers via internal channels (Slack, email, internal storage).
+
+### Install on Galaxy S25 (and other Android test devices)
+
+1. Download the APK to the device.
+2. Open the APK file.
+3. If prompted, allow installs from unknown sources for the app used to open the APK:
+   - **Samsung (One UI):** Settings -> Security and privacy -> More security settings -> Install unknown apps
+   - Select the source app (for example, Files, Chrome, Drive) and enable **Allow from this source**.
+4. Retry APK install and confirm app launch.
+
+### Quick troubleshooting
+
+- **App not installed:** Remove older app build first, then reinstall APK.
+- **Install blocked by policy:** Re-check `Install unknown apps` for the same source app used to open the APK.
+- **Corrupt download:** Re-download APK from the EAS build page.
+- **Build confusion:** Always use `npm run build:android:preview` for internal Android test builds in this phase.
+
+### Scope for this phase
+
+- Internal Android testing only (private distribution).
+- Do not configure Google Play Console, app listing, content rating, or store submission.
+- Do not set up Play Store release workflows in this phase.
+
 ### Local Build
 
 #### Prerequisites
@@ -140,6 +187,8 @@ adb install app/build/outputs/apk/release/app-release.apk
 eas build --profile production --platform ios
 eas build --profile production --platform android
 ```
+
+Production/Play Store distribution is intentionally out of scope for the current internal-testing phase.
 
 ## Build Profiles
 
