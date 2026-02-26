@@ -222,6 +222,12 @@ const SettingsScreen: React.FC = () => {
             All data is stored locally on your device, encrypted at rest.{'\n'}
             No cloud sync or external analytics.
           </Text>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.notificationsNote}>
+            If you disable notifications, you won't receive target-duration alerts, but practice sessions still work normally.
+          </Text>
         </View>
       </View>
 
@@ -387,6 +393,11 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.md,
   },
   privacyStatement: {
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    color: COLORS.text.secondary,
+    lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.sm,
+  },
+  notificationsNote: {
     fontSize: TYPOGRAPHY.fontSize.sm,
     color: COLORS.text.secondary,
     lineHeight: TYPOGRAPHY.lineHeight.normal * TYPOGRAPHY.fontSize.sm,

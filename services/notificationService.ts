@@ -6,10 +6,10 @@ import * as Notifications from 'expo-notifications';
  */
 export const setupNotifications = async (): Promise<boolean> => {
   try {
-    // Request permissions (iOS)
+    // Request permissions at startup (Android 13+ shows runtime prompt on first launch)
     const { status } = await Notifications.requestPermissionsAsync();
 
-    console.log('Notification permission status:', status); // ADD THIS
+    console.log('Notification permission status:', status);
 
     if (status !== 'granted') {
       console.warn('Notification permissions not granted');
@@ -27,7 +27,7 @@ export const setupNotifications = async (): Promise<boolean> => {
       }),
     });
 
-    console.log('Notification handler set successfully'); // ADD THIS
+    console.log('Notification handler set successfully');
     return true;
   } catch (error) {
     console.error('Failed to setup notifications:', error);
@@ -40,7 +40,7 @@ export const setupNotifications = async (): Promise<boolean> => {
  */
 export const scheduleTargetReachedNotification = async (): Promise<void> => {
   try {
-    console.log('Scheduling target reached notification...'); // ADD THIS
+    console.log('Scheduling target reached notification...');
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Practice time complete! 🎉',
@@ -50,7 +50,7 @@ export const scheduleTargetReachedNotification = async (): Promise<void> => {
       },
       trigger: null, // Immediate notification
     });
-    console.log('Notification scheduled with ID:', notificationId); // ADD THIS
+    console.log('Notification scheduled with ID:', notificationId);
   } catch (error) {
     console.error('Failed to schedule notification:', error);
   }
