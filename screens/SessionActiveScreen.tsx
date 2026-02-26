@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   ScrollView,
   Vibration,
   AppState,
+  BackHandler,
+  Platform,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
 import { COLORS, SPACING, TYPOGRAPHY } from "../utils/constants";
@@ -89,7 +91,7 @@ const SessionActiveScreen: React.FC = () => {
   }, [sessionTimer, targetDuration, targetReached]);
 
   // Handle end session and reflect now
-  const handleEndAndReflectNow = async () => {
+  const handleEndAndReflectNow = useCallback(async () => {
     if (!currentSession) return;
 
     setIsEnding(true);
@@ -107,9 +109,10 @@ const SessionActiveScreen: React.FC = () => {
       Alert.alert("Error", "Failed to end session. Please try again.");
       setIsEnding(false);
     }
-  };
+  }, [currentSession, endSession, navigation]);
+
   // Handle end session and reflect later
-  const handleEndAndReflectLater = async () => {
+  const handleEndAndReflectLater = useCallback(async () => {
     if (!currentSession) return;
 
     setIsEnding(true);
@@ -127,7 +130,40 @@ const SessionActiveScreen: React.FC = () => {
       Alert.alert("Error", "Failed to end session. Please try again.");
       setIsEnding(false);
     }
-  };
+  }, [currentSession, endSession, navigation]);
+
+  // Intercept Android hardware back while this screen is focused.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return undefined;
+
+      const onBackPress = () => {
+        if (isEnding) {
+          return true;
+        }
+
+        Alert.alert(
+          "End session before leaving?",
+          "If you leave now, the session will be ended.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "End session",
+              style: "destructive",
+              onPress: () => {
+                void handleEndAndReflectLater();
+              },
+            },
+          ]
+        );
+
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      return () => subscription.remove();
+    }, [handleEndAndReflectLater, isEnding])
+  );
 
   // Calculate progress and color for target mode
   const progress = targetDuration ? Math.min(sessionTimer / targetDuration, 1.0) : null;
