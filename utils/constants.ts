@@ -136,7 +136,6 @@ export const COACHING_TONE_CARDS = [
 
 // Target duration presets (in seconds)
 export const TARGET_DURATION_PRESETS = [
-  { label: '0.5 min', seconds: 0.5 * 60 },
   { label: '15 min', seconds: 15 * 60 },
   { label: '30 min', seconds: 30 * 60 },
   { label: '45 min', seconds: 45 * 60 },
