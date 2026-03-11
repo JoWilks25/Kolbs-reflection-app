@@ -21,6 +21,7 @@ import PendingReflectionsBanner from "../components/PendingReflectionsBanner";
 import PracticeAreaItem from "../components/PracticeAreaItem";
 import EmptyState from "../components/EmptyState";
 import PracticeAreaModal from "../components/PracticeAreaModal";
+import FirstRunCoach from "../components/FirstRunCoach";
 import { checkDeviceSecurity } from "../services/securityService";
 import SecurityWarningBanner from "../components/SecurityWarningBanner";
 
@@ -260,30 +261,33 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         onPress={handlePendingBannerPress}
       />
 
-      <FlatList
-        data={practiceAreas}
-        renderItem={({ item }) => (
-          <PracticeAreaItem
-            item={item}
-            onPress={handlePracticeAreaPress}
-            onViewTimeline={handleViewTimeline}
-            onEdit={openEditPracticeAreaModal}
-          />
-        )}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={
-          practiceAreas.length === 0 ? styles.emptyListContainer : styles.listContainer
-        }
-        ListEmptyComponent={<EmptyState />}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
-          />
-        }
-      />
+      {practiceAreas.length === 0 ? (
+        <View style={styles.emptyListContainer}>
+          <FirstRunCoach onOpenModal={openCreateModal} />
+        </View>
+      ) : (
+        <FlatList
+          data={practiceAreas}
+          renderItem={({ item }) => (
+            <PracticeAreaItem
+              item={item}
+              onPress={handlePracticeAreaPress}
+              onViewTimeline={handleViewTimeline}
+              onEdit={openEditPracticeAreaModal}
+            />
+          )}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+        />
+      )}
 
       {/* New Practice Area Button */}
       <View style={styles.buttonContainer}>

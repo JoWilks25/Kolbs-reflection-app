@@ -12,12 +12,48 @@
 /** Practice Area Type - Classification for AI adaptation */
 export type PracticeAreaType = 'solo_skill' | 'performance' | 'interpersonal' | 'creative';
 
-/** Practice Area Type definitions with labels and descriptions */
+/** Practice Area Type definitions with labels, descriptions, and example practice areas */
 export const PRACTICE_AREA_TYPES = [
-  { value: 'solo_skill' as const, label: 'Solo Skill', description: 'Technical practice, measurable progress' },
-  { value: 'performance' as const, label: 'Performance', description: 'Execution under pressure, audience awareness' },
-  { value: 'interpersonal' as const, label: 'Interpersonal', description: 'Communication, emotional dynamics' },
-  { value: 'creative' as const, label: 'Creative', description: 'Exploration, experimentation, non-linear discovery' },
+  {
+    value: 'solo_skill' as const,
+    label: 'Solo Skill',
+    description: 'Technical practice with measurable progress',
+    examples: [
+      'Guitar – Chord Transitions',
+      'Python – Async Patterns',
+      'Tennis – Serve Technique',
+    ],
+  },
+  {
+    value: 'performance' as const,
+    label: 'Performance',
+    description: 'Execution under pressure, audience awareness',
+    examples: [
+      'Public Speaking – Keynote Delivery',
+      'Sales – Handling Objections',
+      'Job Interview Prep',
+    ],
+  },
+  {
+    value: 'interpersonal' as const,
+    label: 'Interpersonal',
+    description: 'Communication, emotional dynamics',
+    examples: [
+      'Management – Giving Feedback',
+      '1-on-1s – Active Listening',
+      'Conflict – De-escalation Techniques',
+    ],
+  },
+  {
+    value: 'creative' as const,
+    label: 'Creative',
+    description: 'Exploration, experimentation, non-linear discovery',
+    examples: [
+      'Watercolour – Colour Mixing',
+      'Songwriting – Verse Structure',
+      'UX Writing – Microcopy',
+    ],
+  },
 ];
 
 /**
